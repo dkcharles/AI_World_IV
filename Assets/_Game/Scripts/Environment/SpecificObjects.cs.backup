@@ -1,0 +1,360 @@
+using UnityEngine;
+using AIWorld.Agents;
+using AIWorld.Needs;
+
+namespace AIWorld.Environment
+{
+    /// <summary>
+    /// Research station for knowledge and learning activities
+    /// </summary>
+    public class ResearchStation : InteractableObject
+    {
+        [Header("Research Configuration")]
+        public string researchTopic = "AI and Machine Learning";
+        public float knowledgeGainAmount = 0.4f;
+        public bool providesAchievementSatisfaction = true;
+        
+        public override string InteractionPrompt => $"Research {researchTopic}";
+        
+        protected override void Start()
+        {
+            objectName = "Research Station";
+            description = $"A research station for studying {researchTopic}";
+            primaryInteractionType = InteractionType.Study;
+            
+            // Configure need satisfactions
+            needSatisfactions = new NeedSatisfaction[]
+            {
+                new NeedSatisfaction { needName = "Knowledge", satisfactionAmount = knowledgeGainAmount },
+                new NeedSatisfaction { needName = "Achievement", satisfactionAmount = providesAchievementSatisfaction ? 0.2f : 0f }
+            };
+            
+            base.Start();
+        }
+        
+        protected override void OnInteractionStarted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"📚 {agent.AgentName} is researching {researchTopic}");
+            }
+            
+            // Add research topic to agent's beliefs
+            if (agent.BDI != null)
+            {
+                agent.BDI.AddBelief("researched_topic", new[] { researchTopic }, 0.8f, 
+                    $"I studied {researchTopic} at the research station");
+            }
+        }
+        
+        protected override void OnInteractionCompleted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"🎓 {agent.AgentName} completed research on {researchTopic}");
+            }
+            
+            // Boost agent's knowledge belief
+            if (agent.BDI != null)
+            {
+                agent.BDI.AddBelief("knowledgeable_about", new[] { researchTopic }, 0.9f,
+                    $"I now have good knowledge about {researchTopic}");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Creative workspace for artistic and innovative activities
+    /// </summary>
+    public class CreativeWorkspace : InteractableObject
+    {
+        [Header("Creative Configuration")]
+        public string creativeActivity = "Design and Innovation";
+        public float creativityGainAmount = 0.5f;
+        public bool inspiresSocialSharing = true;
+        
+        public override string InteractionPrompt => $"Work on {creativeActivity}";
+        
+        protected override void Start()
+        {
+            objectName = "Creative Workspace";
+            description = $"A space for {creativeActivity} work";
+            primaryInteractionType = InteractionType.Create;
+            maxSimultaneousUsers = 2; // Allow collaboration
+            
+            // Configure need satisfactions
+            needSatisfactions = new NeedSatisfaction[]
+            {
+                new NeedSatisfaction { needName = "Creativity", satisfactionAmount = creativityGainAmount },
+                new NeedSatisfaction { needName = "Achievement", satisfactionAmount = 0.3f }
+            };
+            
+            base.Start();
+        }
+        
+        protected override void OnInteractionStarted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"🎨 {agent.AgentName} is working on {creativeActivity}");
+            }
+            
+            // If multiple users, it's collaboration
+            if (CurrentUserCount > 1)
+            {
+                foreach (var user in currentUsers)
+                {
+                    if (user != agent && user.Needs != null)
+                    {
+                        user.Needs.SatisfyNeedsFromSocialInteraction("creative_collaboration", 0.3f);
+                    }
+                }
+            }
+        }
+        
+        protected override void OnInteractionCompleted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"✨ {agent.AgentName} completed creative work on {creativeActivity}");
+            }
+            
+            // Add creative achievement to beliefs
+            if (agent.BDI != null)
+            {
+                agent.BDI.AddBelief("created_work", new[] { creativeActivity }, 0.8f,
+                    $"I created something in {creativeActivity}");
+                    
+                if (CurrentUserCount > 1)
+                {
+                    agent.BDI.AddBelief("collaborated_creatively", new[] { "true" }, 0.9f,
+                        "I collaborated with others on creative work");
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Social hub for gatherings and communication
+    /// </summary>
+    public class SocialHub : InteractableObject
+    {
+        [Header("Social Configuration")]
+        public string socialActivity = "Discussion and Networking";
+        public float socialGainAmount = 0.4f;
+        public int optimalGroupSize = 3;
+        
+        public override string InteractionPrompt => $"Join {socialActivity}";
+        
+        protected override void Start()
+        {
+            objectName = "Social Hub";
+            description = $"A gathering place for {socialActivity}";
+            primaryInteractionType = InteractionType.Socialize;
+            maxSimultaneousUsers = 5; // Allow group interactions
+            
+            // Configure need satisfactions
+            needSatisfactions = new NeedSatisfaction[]
+            {
+                new NeedSatisfaction { needName = "Social Connection", satisfactionAmount = socialGainAmount },
+                new NeedSatisfaction { needName = "Esteem", satisfactionAmount = 0.15f }
+            };
+            
+            base.Start();
+        }
+        
+        protected override void OnInteractionStarted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"👥 {agent.AgentName} joined the social hub ({CurrentUserCount} total)");
+            }
+            
+            // Boost social satisfaction for all current users
+            foreach (var user in currentUsers)
+            {
+                if (user.Needs != null)
+                {
+                    float socialBoost = CurrentUserCount >= optimalGroupSize ? 0.2f : 0.1f;
+                    user.Needs.SatisfyNeedsFromSocialInteraction("group_gathering", socialBoost);
+                }
+            }
+        }
+        
+        protected override void OnInteractionCompleted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"👋 {agent.AgentName} completed social interaction at hub");
+            }
+            
+            // Add social experience to beliefs
+            if (agent.BDI != null)
+            {
+                agent.BDI.AddBelief("participated_in", new[] { socialActivity }, 0.8f,
+                    $"I participated in {socialActivity} at the social hub");
+                    
+                if (CurrentUserCount >= optimalGroupSize)
+                {
+                    agent.BDI.AddBelief("group_experience", new[] { "positive" }, 0.9f,
+                        "I had a positive group social experience");
+                }
+            }
+        }
+        
+        public override float GetAttractiveness(Agent agent)
+        {
+            float baseAttractiveness = base.GetAttractiveness(agent);
+            
+            // More attractive when there are already people there (but not overcrowded)
+            if (CurrentUserCount > 0 && CurrentUserCount < maxSimultaneousUsers)
+            {
+                float socialBonus = 0.3f * (CurrentUserCount / (float)optimalGroupSize);
+                baseAttractiveness += socialBonus;
+            }
+            
+            return Mathf.Clamp01(baseAttractiveness);
+        }
+    }
+    
+    /// <summary>
+    /// Rest area for energy recovery and relaxation
+    /// </summary>
+    public class RestArea : InteractableObject
+    {
+        [Header("Rest Configuration")]
+        public string restActivity = "Relaxation and Recharge";
+        public float energyGainAmount = 0.6f;
+        public bool providesSecurityFeeling = true;
+        
+        public override string InteractionPrompt => $"Use {restActivity}";
+        
+        protected override void Start()
+        {
+            objectName = "Rest Area";
+            description = $"A peaceful area for {restActivity}";
+            primaryInteractionType = InteractionType.Rest;
+            maxSimultaneousUsers = 3; // Quiet but can accommodate a few
+            
+            // Configure need satisfactions
+            needSatisfactions = new NeedSatisfaction[]
+            {
+                new NeedSatisfaction { needName = "Energy", satisfactionAmount = energyGainAmount },
+                new NeedSatisfaction { needName = "Safety", satisfactionAmount = providesSecurityFeeling ? 0.3f : 0f }
+            };
+            
+            base.Start();
+        }
+        
+        protected override void OnInteractionStarted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"😴 {agent.AgentName} is resting and recharging");
+            }
+        }
+        
+        protected override void OnInteractionCompleted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"⚡ {agent.AgentName} feels refreshed after resting");
+            }
+            
+            // Add rest experience to beliefs
+            if (agent.BDI != null)
+            {
+                agent.BDI.AddBelief("rested_at", new[] { objectName }, 0.9f,
+                    "I feel refreshed after resting here");
+                    
+                if (providesSecurityFeeling)
+                {
+                    agent.BDI.AddBelief("safe_location", new[] { $"{transform.position.x:F1},{transform.position.y:F1},{transform.position.z:F1}" }, 0.8f,
+                        "This is a safe and peaceful location");
+                }
+            }
+        }
+        
+        public override float GetAttractiveness(Agent agent)
+        {
+            float baseAttractiveness = base.GetAttractiveness(agent);
+            
+            // Less attractive when crowded (rest areas should be peaceful)
+            if (CurrentUserCount >= maxSimultaneousUsers - 1)
+            {
+                baseAttractiveness *= 0.5f;
+            }
+            
+            return Mathf.Clamp01(baseAttractiveness);
+        }
+    }
+    
+    /// <summary>
+    /// Observation point for environmental awareness
+    /// </summary>
+    public class ObservationPoint : InteractableObject
+    {
+        [Header("Observation Configuration")]
+        public string observationFocus = "Environment and Activity";
+        public float awarenessGainAmount = 0.3f;
+        public float observationRadius = 15f;
+        
+        public override string InteractionPrompt => $"Observe {observationFocus}";
+        
+        protected override void Start()
+        {
+            objectName = "Observation Point";
+            description = $"A vantage point for observing {observationFocus}";
+            primaryInteractionType = InteractionType.Observe;
+            maxSimultaneousUsers = 2;
+            
+            // Configure need satisfactions
+            needSatisfactions = new NeedSatisfaction[]
+            {
+                new NeedSatisfaction { needName = "Knowledge", satisfactionAmount = awarenessGainAmount },
+                new NeedSatisfaction { needName = "Safety", satisfactionAmount = 0.2f }
+            };
+            
+            base.Start();
+        }
+        
+        protected override void OnInteractionCompleted(Agent agent)
+        {
+            if (logInteractions)
+            {
+                Debug.Log($"👁️ {agent.AgentName} gained awareness from observation");
+            }
+            
+            // Add environmental knowledge to beliefs
+            if (agent.BDI != null)
+            {
+                // Observe other agents and objects in range
+                var gameManager = FindFirstObjectByType<AIWorld.Managers.GameManager>();
+                if (gameManager != null)
+                {
+                    var nearbyAgents = gameManager.GetAgentsInRange(transform.position, observationRadius);
+                    foreach (var observedAgent in nearbyAgents)
+                    {
+                        if (observedAgent != agent)
+                        {
+                            agent.BDI.AddBelief("observed_agent", new[] { observedAgent.AgentName, "active" }, 0.7f,
+                                $"I observed {observedAgent.AgentName} from the observation point");
+                        }
+                    }
+                }
+                
+                agent.BDI.AddBelief("environmental_awareness", new[] { "high" }, 0.8f,
+                    "I have good awareness of the environment from observation");
+            }
+        }
+        
+        protected override void OnDrawGizmosSelected()
+        {
+            base.OnDrawGizmosSelected();
+            
+            // Draw observation radius
+            Gizmos.color = Color.cyan;
+            Gizmos.DrawWireSphere(transform.position, observationRadius);
+        }
+    }
+}
