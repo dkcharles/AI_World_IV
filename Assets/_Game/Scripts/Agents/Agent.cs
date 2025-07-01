@@ -55,6 +55,30 @@ namespace AIWorld.Agents
         public List<Message> ConversationHistory => conversationHistory;
         public NeedsManager Needs => needsManager;
         public BDIEngine BDI => bdiEngine;
+        public AgentPersonality Personality => personality;
+        
+        /// <summary>
+        /// Force update agent name (used by GameManager for duplicate resolution)
+        /// </summary>
+        public void ForceUpdateName(string newName)
+        {
+            if (personality != null)
+            {
+                // Update the personality asset if possible
+                personality.agentName = newName;
+            }
+            
+            // Update any internal beliefs about self
+            if (enableCognitiveArchitecture && bdiEngine != null)
+            {
+                bdiEngine.AddBelief("agent_name", new[] { newName }, 1.0f, "I know my own name");
+            }
+            
+            if (logAllMessages)
+            {
+                Debug.Log($"🔧 {gameObject.name}: Name updated to '{newName}'");
+            }
+        }
         
         private void Awake()
         {

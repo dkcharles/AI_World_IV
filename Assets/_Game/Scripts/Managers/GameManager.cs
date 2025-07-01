@@ -2,12 +2,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using AIWorld.Agents;
 using AIWorld.Data;
+using System.Linq;
 
 namespace AIWorld.Managers
 {
     /// <summary>
-    /// Singleton GameManager that coordinates all agents and manages the simulation
-    /// Provides central access to agent registry and simulation control
+    /// Enhanced GameManager with agent identity validation and unique name enforcement
+    /// Prevents duplicate agent names and provides comprehensive agent management
     /// </summary>
     public class GameManager : MonoBehaviour
     {
@@ -35,6 +36,11 @@ namespace AIWorld.Managers
         public float simulationSpeed = 1f;
         public int maxAgentCount = 10;
         
+        [Header("Identity Management")]
+        public bool enforceUniqueNames = true;
+        public bool autoFixDuplicateNames = true;
+        public bool logIdentityValidation = true;
+        
         [Header("Debug & Monitoring")]
         public bool logAgentRegistration = true;
         public bool showSimulationStats = true;
@@ -42,7 +48,12 @@ namespace AIWorld.Managers
         
         // Agent management
         private Dictionary<string, Agent> agentRegistry;
+        private Dictionary<string, Agent> agentsByName; // NEW: Track agents by display name
         private List<Agent> allAgents;
+        
+        // Identity tracking
+        private HashSet<string> usedAgentNames;
+        private Dictionary<string, int> nameCounters; // For auto-fixing duplicates
         
         // Simulation stats
         private int totalMessages = 0;
@@ -90,14 +101,17 @@ namespace AIWorld.Managers
         }
         
         /// <summary>
-        /// Initialize the GameManager
+        /// Initialize the GameManager with enhanced identity tracking
         /// </summary>
         private void Initialize()
         {
             agentRegistry = new Dictionary<string, Agent>();
+            agentsByName = new Dictionary<string, Agent>();
             allAgents = new List<Agent>();
+            usedAgentNames = new HashSet<string>();
+            nameCounters = new Dictionary<string, int>();
             
-            Debug.Log("🎮 GameManager initialized");
+            Debug.Log("🎮 GameManager initialized with identity validation");
         }
         
         /// <summary>
@@ -114,11 +128,15 @@ namespace AIWorld.Managers
             // Ensure collections are initialized
             if (allAgents == null) Initialize();
             
+            // Validate all agent identities before starting
+            ValidateAllAgentIdentities();
+            
             simulationStartTime = Time.time;
             IsSimulationRunning = true;
             Time.timeScale = simulationSpeed;
             
             Debug.Log($"🚀 AI World Simulation started with {ActiveAgentCount} agents");
+            LogAgentIdentitySummary();
             
             // Log initial agent states
             if (allAgents != null)
@@ -164,7 +182,7 @@ namespace AIWorld.Managers
         }
         
         /// <summary>
-        /// Register an agent with the manager
+        /// Register an agent with enhanced identity validation
         /// </summary>
         public void RegisterAgent(Agent agent)
         {
@@ -189,13 +207,177 @@ namespace AIWorld.Managers
                 return;
             }
             
+            // Validate and potentially fix agent identity
+            string validatedName = ValidateAgentIdentity(agent);
+            
+            // Update agent name if it was changed
+            if (validatedName != agent.AgentName)
+            {
+                Debug.Log($"🔧 Updated agent name: {agent.AgentName} → {validatedName}");
+                // Note: ForceUpdateName method needs to be added to Agent.cs
+                if (agent.GetType().GetMethod("ForceUpdateName") != null)
+                {
+                    agent.GetType().GetMethod("ForceUpdateName").Invoke(agent, new object[] { validatedName });
+                }
+                else
+                {
+                    Debug.LogWarning($"⚠️ Agent.ForceUpdateName method not found. Please add to Agent.cs");
+                }
+            }
+            
+            // Register agent
             agentRegistry[agent.agentId] = agent;
+            agentsByName[agent.AgentName] = agent;
             allAgents.Add(agent);
+            usedAgentNames.Add(agent.AgentName);
             
             if (logAgentRegistration)
             {
                 Debug.Log($"✅ Registered agent: {agent.AgentName} (ID: {agent.agentId})");
             }
+        }
+        
+        /// <summary>
+        /// Validate agent identity and ensure uniqueness
+        /// </summary>
+        private string ValidateAgentIdentity(Agent agent)
+        {
+            string originalName = agent.AgentName;
+            string validatedName = originalName;
+            
+            if (enforceUniqueNames)
+            {
+                // Check for name collision
+                if (usedAgentNames.Contains(originalName) || agentsByName.ContainsKey(originalName))
+                {
+                    if (autoFixDuplicateNames)
+                    {
+                        validatedName = GenerateUniqueVariant(originalName);
+                        
+                        if (logIdentityValidation)
+                        {
+                            Debug.LogWarning($"⚠️ Name collision detected: '{originalName}' → '{validatedName}'");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"❌ Agent name '{originalName}' is already in use! Set autoFixDuplicateNames = true to auto-resolve.");
+                        return originalName; // Return original name, let caller handle
+                    }
+                }
+            }
+            
+            if (logIdentityValidation && validatedName == originalName)
+            {
+                Debug.Log($"✅ Agent identity validated: {validatedName}");
+            }
+            
+            return validatedName;
+        }
+        
+        /// <summary>
+        /// Generate a unique variant of a name by appending a number
+        /// </summary>
+        private string GenerateUniqueVariant(string baseName)
+        {
+            // Extract base name without any existing number suffix
+            string cleanBaseName = baseName;
+            if (System.Text.RegularExpressions.Regex.IsMatch(baseName, @" \d+$"))
+            {
+                cleanBaseName = System.Text.RegularExpressions.Regex.Replace(baseName, @" \d+$", "");
+            }
+            
+            if (!nameCounters.ContainsKey(cleanBaseName))
+            {
+                nameCounters[cleanBaseName] = 1;
+            }
+            
+            string candidate;
+            do
+            {
+                nameCounters[cleanBaseName]++;
+                candidate = $"{cleanBaseName} {nameCounters[cleanBaseName]}";
+            }
+            while (usedAgentNames.Contains(candidate) || agentsByName.ContainsKey(candidate));
+            
+            return candidate;
+        }
+        
+        /// <summary>
+        /// Validate all currently registered agent identities
+        /// </summary>
+        private void ValidateAllAgentIdentities()
+        {
+            if (allAgents == null || allAgents.Count == 0) return;
+            
+            var duplicateGroups = allAgents
+                .Where(a => a != null)
+                .GroupBy(a => a.AgentName)
+                .Where(g => g.Count() > 1);
+            
+            foreach (var group in duplicateGroups)
+            {
+                Debug.LogWarning($"⚠️ Found {group.Count()} agents with name '{group.Key}'");
+                
+                if (autoFixDuplicateNames)
+                {
+                    var agents = group.ToList();
+                    for (int i = 1; i < agents.Count; i++) // Keep first agent's name, rename others
+                    {
+                        string newName = GenerateUniqueVariant(agents[i].AgentName);
+                        string oldName = agents[i].AgentName;
+                        
+                        // Update tracking dictionaries
+                        agentsByName.Remove(oldName);
+                        usedAgentNames.Remove(oldName);
+                        
+                        // Update agent name
+                        if (agents[i].GetType().GetMethod("ForceUpdateName") != null)
+                        {
+                            agents[i].GetType().GetMethod("ForceUpdateName").Invoke(agents[i], new object[] { newName });
+                        }
+                        
+                        agentsByName[newName] = agents[i];
+                        usedAgentNames.Add(newName);
+                        
+                        Debug.Log($"🔧 Auto-fixed duplicate: '{oldName}' → '{newName}'");
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Log summary of all agent identities
+        /// </summary>
+        private void LogAgentIdentitySummary()
+        {
+            if (allAgents == null || allAgents.Count == 0) return;
+            
+            Debug.Log("👥 Agent Identity Summary:");
+            foreach (var agent in allAgents)
+            {
+                if (agent != null)
+                {
+                    Debug.Log($"   🤖 {agent.AgentName} ({agent.Personality?.role ?? "Unknown Role"})");
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Check if an agent name is already in use
+        /// </summary>
+        public bool IsNameInUse(string name)
+        {
+            return usedAgentNames.Contains(name) || agentsByName.ContainsKey(name);
+        }
+        
+        /// <summary>
+        /// Get agent by display name
+        /// </summary>
+        public Agent GetAgentByName(string name)
+        {
+            agentsByName.TryGetValue(name, out Agent agent);
+            return agent;
         }
         
         /// <summary>
@@ -208,7 +390,9 @@ namespace AIWorld.Managers
             if (agentRegistry.ContainsKey(agent.agentId))
             {
                 agentRegistry.Remove(agent.agentId);
+                agentsByName.Remove(agent.AgentName);
                 allAgents.Remove(agent);
+                usedAgentNames.Remove(agent.AgentName);
                 
                 if (logAgentRegistration)
                 {
@@ -284,7 +468,7 @@ namespace AIWorld.Managers
         }
         
         /// <summary>
-        /// Log final simulation statistics
+        /// Log final simulation statistics with identity information
         /// </summary>
         private void LogFinalStats()
         {
@@ -293,6 +477,7 @@ namespace AIWorld.Managers
             Debug.Log("═══════════════════════════════════════════════════");
             Debug.Log($"⏱️  Total Simulation Time: {SimulationTime:F1} seconds");
             Debug.Log($"🤖 Total Agents: {ActiveAgentCount}");
+            Debug.Log($"📛 Unique Agent Names: {usedAgentNames.Count}");
             Debug.Log($"💬 Total Inter-Agent Messages: {totalMessages}");
             Debug.Log($"💭 Total Inner Dialogues: {totalInnerDialogues}");
             Debug.Log($"📈 Total Communications: {totalMessages + totalInnerDialogues}");
@@ -301,6 +486,16 @@ namespace AIWorld.Managers
             {
                 float avgMessagesPerAgent = (float)(totalMessages + totalInnerDialogues) / ActiveAgentCount;
                 Debug.Log($"📊 Average Messages per Agent: {avgMessagesPerAgent:F1}");
+            }
+            
+            // Show any name duplications that were resolved
+            if (nameCounters.Count > 0)
+            {
+                Debug.Log($"🔧 Name Variants Created: {nameCounters.Count}");
+                foreach (var kvp in nameCounters)
+                {
+                    Debug.Log($"   '{kvp.Key}' → {kvp.Value} variants");
+                }
             }
             
             Debug.Log("═══════════════════════════════════════════════════");
@@ -324,6 +519,16 @@ namespace AIWorld.Managers
         }
         
         /// <summary>
+        /// Check for and report any identity issues
+        /// </summary>
+        [ContextMenu("Validate Agent Identities")]
+        public void ValidateAgentIdentitiesManual()
+        {
+            ValidateAllAgentIdentities();
+            LogAgentIdentitySummary();
+        }
+        
+        /// <summary>
         /// Reset simulation (clear all data)
         /// </summary>
         [ContextMenu("Reset Simulation")]
@@ -334,13 +539,18 @@ namespace AIWorld.Managers
             totalMessages = 0;
             totalInnerDialogues = 0;
             
+            // Clear identity tracking
+            usedAgentNames.Clear();
+            nameCounters.Clear();
+            agentsByName.Clear();
+            
             // Clear conversation histories
             foreach (var agent in allAgents)
             {
                 agent.ConversationHistory.Clear();
             }
             
-            Debug.Log("🔄 Simulation reset");
+            Debug.Log("🔄 Simulation reset with identity tracking cleared");
         }
         
         private void OnApplicationPause(bool pauseStatus)
@@ -364,14 +574,11 @@ namespace AIWorld.Managers
             CancelInvoke();
             
             // Clear agent references
-            if (agentRegistry != null)
-            {
-                agentRegistry.Clear();
-            }
-            if (allAgents != null)
-            {
-                allAgents.Clear();
-            }
+            if (agentRegistry != null) agentRegistry.Clear();
+            if (agentsByName != null) agentsByName.Clear();
+            if (allAgents != null) allAgents.Clear();
+            if (usedAgentNames != null) usedAgentNames.Clear();
+            if (nameCounters != null) nameCounters.Clear();
             
             // Reset singleton instance if this is the current instance
             if (_instance == this)
@@ -405,7 +612,10 @@ namespace AIWorld.Managers
                     
                     // Clear references
                     if (agentRegistry != null) agentRegistry.Clear();
+                    if (agentsByName != null) agentsByName.Clear();
                     if (allAgents != null) allAgents.Clear();
+                    if (usedAgentNames != null) usedAgentNames.Clear();
+                    if (nameCounters != null) nameCounters.Clear();
                     
                     _instance = null;
                 }
