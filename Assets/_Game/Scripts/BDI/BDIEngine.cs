@@ -65,7 +65,7 @@ namespace AIWorld.BDI
             
             // Get personality from Agent component
             var agent = GetComponent<AIWorld.Agents.Agent>();
-            personality = agent?.personality;
+            personality = agent?.Personality;
         }
         
         private void Start()

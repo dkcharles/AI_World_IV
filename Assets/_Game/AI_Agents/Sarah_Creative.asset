@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bf7bbf68cf138c44a81e6e2efd54a2ac, type: 3}
   m_Name: Sarah_Creative
   m_EditorClassIdentifier: 
-  agentName: Emma Rodriguez
+  agentName: Sarah Chen
   role: Research Coordinator
   background: A socialable leader and people person.
   extraversion: 0.9

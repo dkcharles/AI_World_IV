@@ -107,9 +107,9 @@ namespace AIWorld.Movement
         {
             if (navAgent == null) return;
             
-            // Check if agent is stuck
+            // Check if agent is stuck (made less sensitive)
             float distanceMoved = Vector3.Distance(transform.position, lastPosition);
-            if (distanceMoved < 0.1f)
+            if (distanceMoved < 0.05f)  // Reduced from 0.1f
             {
                 timeSinceLastMovement += 1f;
             }
@@ -119,8 +119,8 @@ namespace AIWorld.Movement
                 lastPosition = transform.position;
             }
             
-            // Handle stuck agent
-            if (timeSinceLastMovement > 5f && navAgent.hasPath)
+            // Handle stuck agent (increased timeout from 5f to 10f)
+            if (timeSinceLastMovement > 10f && navAgent.hasPath)
             {
                 HandleStuckAgent();
             }

@@ -126,7 +126,7 @@ namespace AIWorld.Communication
             string endpoint = useEnhancedEndpoints ? "/chat-enhanced" : "/chat";
             string url = serverUrl + endpoint;
             
-            // Build request data using Unity's serializable classes
+            // Build request data - let server make parameter decisions with Unity hints
             var requestData = new EnhancedChatRequest
             {
                 agentId = agentId,
@@ -134,8 +134,8 @@ namespace AIWorld.Communication
                 taskType = TaskTypeToString(taskType),
                 urgency = urgency.ToString().ToLower(),
                 conversationHistory = conversationHistory?.ToArray() ?? new Message[0],
-                temperature = GetTemperatureForTask(taskType),
-                maxTokens = GetTokensForTask(taskType),
+                temperatureHint = GetTemperatureForTask(taskType),  // Hint only, server decides
+                tokenHint = GetTokensForTask(taskType),             // Hint only, server decides
                 model = string.IsNullOrEmpty(forceModel) ? null : forceModel,
                 systemPrompt = !string.IsNullOrEmpty(systemPrompt) ? systemPrompt : 
                               (personality != null ? GeneratePersonalitySystemPrompt(personality) : null),
@@ -146,7 +146,7 @@ namespace AIWorld.Communication
             
             if (logModelSelection)
             {
-                Debug.Log($"🚀 Enhanced Chat Request: {agentId} | Task: {taskType} | Urgency: {urgency}");
+                Debug.Log($"🚀 Enhanced Chat Request: {agentId} | Task: {taskType} | Urgency: {urgency} | Temp Hint: {requestData.temperatureHint:F2} | Token Hint: {requestData.tokenHint}");
             }
             
             using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
@@ -240,8 +240,8 @@ namespace AIWorld.Communication
             {
                 agentId = agentId,
                 prompt = prompt,
-                temperature = 0.7f,
-                maxTokens = 400,
+                temperatureHint = 0.7f,  // Let server optimize inner dialogue temperature
+                tokenHint = 400,         // Let server optimize inner dialogue tokens
                 model = string.IsNullOrEmpty(forceModel) ? null : forceModel,
                 systemPrompt = !string.IsNullOrEmpty(systemPrompt) ? systemPrompt :
                               (personality != null ? GenerateInnerDialogueSystemPrompt(personality) : null),
@@ -399,20 +399,24 @@ namespace AIWorld.Communication
         
         private int GetTokensForTask(TaskType taskType)
         {
+            // Unity provides hints, but server will optimize based on selected model
+            // These are reasonable baseline hints for any model
             return taskType switch
             {
-                TaskType.BDIReasoning => 600,       // More tokens for complex reasoning
-                TaskType.GoalPlanning => 550,        // More for planning
-                TaskType.LongConversation => 700,    // More for extended dialogue
-                TaskType.PersonalityExpression => 600, // More for personality
-                TaskType.EmotionalResponse => 500,   // More for emotional depth
-                TaskType.Conversation => 550,        // More for natural dialogue
-                TaskType.InnerDialogue => 500,       // More for reflection
-                TaskType.SelfReflection => 550,      // More for deep thoughts
-                TaskType.StatusUpdate => 300,        // Increased for personality
-                TaskType.SimpleAcknowledgment => 250, // Increased minimum
-                TaskType.ReactiveResponse => 350,    // Increased for context
-                _ => 450 // Increased default
+                TaskType.BDIReasoning => 600,       // Complex reasoning (server will boost for Qwen3)
+                TaskType.GoalPlanning => 550,        // Planning complexity
+                TaskType.LongConversation => 800,    // Extended dialogue (server will boost for Llama3.2)
+                TaskType.PersonalityExpression => 600, // Rich personality (server will optimize per model)
+                TaskType.EmotionalResponse => 500,   // Emotional depth
+                TaskType.Conversation => 500,        // Standard dialogue
+                TaskType.InnerDialogue => 500,       // Reflection depth
+                TaskType.SelfReflection => 550,      // Deep thoughts
+                TaskType.MemoryRetrieval => 600,     // Memory complexity
+                TaskType.ContextMaintenance => 550,  // Context handling
+                TaskType.StatusUpdate => 200,        // Brief updates (server will reduce for Gemma3)
+                TaskType.SimpleAcknowledgment => 150, // Very brief (server will minimize for Gemma3)
+                TaskType.ReactiveResponse => 250,    // Quick responses (server optimizes for speed)
+                _ => 450 // Reasonable default
             };
         }
         
@@ -479,8 +483,8 @@ namespace AIWorld.Communication
             public string taskType;
             public string urgency;
             public Message[] conversationHistory;
-            public float temperature;
-            public int maxTokens;
+            public float temperatureHint;  // Unity's suggested temperature (server decides final value)
+            public int tokenHint;          // Unity's suggested token count (server decides final value)
             public string model;
             public string systemPrompt;
             public SerializablePersonality personality;
@@ -491,8 +495,8 @@ namespace AIWorld.Communication
         {
             public string agentId;
             public string prompt;
-            public float temperature;
-            public int maxTokens;
+            public float temperatureHint;  // Unity's suggested temperature (server decides final value)
+            public int tokenHint;          // Unity's suggested token count (server decides final value)
             public string model;
             public string systemPrompt;
             public SerializablePersonality personality;

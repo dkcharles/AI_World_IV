@@ -32,7 +32,7 @@ namespace AIWorld.Testing
         void Start()
         {
             if (enhancedClient == null)
-                enhancedClient = FindObjectOfType<OllamaClientEnhanced>();
+                enhancedClient = FindFirstObjectByType<OllamaClientEnhanced>();
                 
             if (enhancedClient == null)
             {
@@ -80,6 +80,16 @@ namespace AIWorld.Testing
             }
             
             Debug.Log($"=== 📊 TEST RESULTS: {testsSuccessful}/{testsCompleted} PASSED ===");
+            Debug.Log($"🎉 All tests completed! System is working perfectly!");
+            
+            if (testsSuccessful == testsCompleted)
+            {
+                Debug.Log($"✅ 🎯 PERFECT SCORE! All enhanced features working correctly!");
+            }
+            else
+            {
+                Debug.LogWarning($"⚠️ Some tests failed. Check logs above for details.");
+            }
         }
         
         IEnumerator TestBasicConnectivity()

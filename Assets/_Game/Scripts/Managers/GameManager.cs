@@ -17,16 +17,34 @@ namespace AIWorld.Managers
         {
             get
             {
+                // Don't create new instances during application quit or when destroying
+                if (Application.isPlaying == false) return null;
+                
                 if (_instance == null)
                 {
                     _instance = FindFirstObjectByType<GameManager>();
                     if (_instance == null)
                     {
-                        GameObject gameManagerObject = new GameObject("GameManager");
-                        _instance = gameManagerObject.AddComponent<GameManager>();
-                        DontDestroyOnLoad(gameManagerObject);
+                        // Don't create new instances if we're quitting
+                        if (Application.isPlaying)
+                        {
+                            GameObject gameManagerObject = new GameObject("GameManager");
+                            _instance = gameManagerObject.AddComponent<GameManager>();
+                            
+                            // Only use DontDestroyOnLoad in builds, not in editor
+                            #if !UNITY_EDITOR
+                            DontDestroyOnLoad(gameManagerObject);
+                            #endif
+                        }
                     }
                 }
+                
+                // Return null if the instance is being destroyed
+                if (_instance != null && _instance.isDestroying)
+                {
+                    return null;
+                }
+                
                 return _instance;
             }
         }
@@ -65,13 +83,22 @@ namespace AIWorld.Managers
         public bool IsSimulationRunning { get; private set; }
         public float SimulationTime => Time.time - simulationStartTime;
         
+        // Destruction safety
+        private bool isDestroying = false;
+        private bool isQuitting = false;
+        
         private void Awake()
         {
             // Singleton pattern
             if (_instance == null)
             {
                 _instance = this;
+                
+                // Only use DontDestroyOnLoad in builds, not in editor
+                #if !UNITY_EDITOR
                 DontDestroyOnLoad(gameObject);
+                #endif
+                
                 Initialize();
                 
                 #if UNITY_EDITOR
@@ -186,9 +213,9 @@ namespace AIWorld.Managers
         /// </summary>
         public void RegisterAgent(Agent agent)
         {
-            if (agent == null)
+            // Safety check: don't register agents if we're being destroyed
+            if (isDestroying || isQuitting || agent == null)
             {
-                Debug.LogError("Cannot register null agent");
                 return;
             }
             
@@ -201,9 +228,9 @@ namespace AIWorld.Managers
                 return;
             }
             
-            if (agentRegistry.ContainsKey(agent.agentId))
+            if (agentRegistry.ContainsKey(agent.AgentId))
             {
-                Debug.LogWarning($"Agent {agent.agentId} is already registered");
+                Debug.LogWarning($"Agent {agent.AgentId} is already registered");
                 return;
             }
             
@@ -226,14 +253,14 @@ namespace AIWorld.Managers
             }
             
             // Register agent
-            agentRegistry[agent.agentId] = agent;
+            agentRegistry[agent.AgentId] = agent;
             agentsByName[agent.AgentName] = agent;
             allAgents.Add(agent);
             usedAgentNames.Add(agent.AgentName);
             
             if (logAgentRegistration)
             {
-                Debug.Log($"✅ Registered agent: {agent.AgentName} (ID: {agent.agentId})");
+                Debug.Log($"✅ Registered agent: {agent.AgentName} (ID: {agent.AgentId})");
             }
         }
         
@@ -385,18 +412,19 @@ namespace AIWorld.Managers
         /// </summary>
         public void UnregisterAgent(Agent agent)
         {
-            if (agent == null) return;
+            // Safety check: still allow unregistration during destruction for cleanup
+            if (agent == null || agentRegistry == null) return;
             
-            if (agentRegistry.ContainsKey(agent.agentId))
+            if (agentRegistry.ContainsKey(agent.AgentId))
             {
-                agentRegistry.Remove(agent.agentId);
-                agentsByName.Remove(agent.AgentName);
-                allAgents.Remove(agent);
-                usedAgentNames.Remove(agent.AgentName);
+                agentRegistry.Remove(agent.AgentId);
+                agentsByName?.Remove(agent.AgentName);
+                allAgents?.Remove(agent);
+                usedAgentNames?.Remove(agent.AgentName);
                 
-                if (logAgentRegistration)
+                if (logAgentRegistration && !isDestroying)
                 {
-                    Debug.Log($"❌ Unregistered agent: {agent.AgentName} (ID: {agent.agentId})");
+                    Debug.Log($"❌ Unregistered agent: {agent.AgentName} (ID: {agent.AgentId})");
                 }
             }
         }
@@ -461,7 +489,8 @@ namespace AIWorld.Managers
         /// </summary>
         private void LogSimulationStats()
         {
-            if (!IsSimulationRunning) return;
+            // Safety check: don't log if we're being destroyed
+            if (isDestroying || isQuitting || !IsSimulationRunning) return;
             
             Debug.Log($"📊 Simulation Stats - Time: {SimulationTime:F1}s | Agents: {ActiveAgentCount} | " +
                      $"Messages: {totalMessages} | Inner Dialogues: {totalInnerDialogues}");
@@ -563,22 +592,39 @@ namespace AIWorld.Managers
         
         private void OnDestroy()
         {
+            // Set destruction flag immediately to prevent race conditions
+            isDestroying = true;
+            
+            // Cancel any invoked repeating methods FIRST
+            CancelInvoke();
+            
             // Stop any running simulations
             if (IsSimulationRunning)
             {
-                LogFinalStats();
-                StopSimulation();
+                try
+                {
+                    LogFinalStats();
+                    StopSimulation();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Exception during simulation stop: {e.Message}");
+                }
             }
             
-            // Cancel any invoked repeating methods
-            CancelInvoke();
-            
-            // Clear agent references
-            if (agentRegistry != null) agentRegistry.Clear();
-            if (agentsByName != null) agentsByName.Clear();
-            if (allAgents != null) allAgents.Clear();
-            if (usedAgentNames != null) usedAgentNames.Clear();
-            if (nameCounters != null) nameCounters.Clear();
+            // Safely clear agent references with null checks
+            try
+            {
+                if (agentRegistry != null) agentRegistry.Clear();
+                if (agentsByName != null) agentsByName.Clear();
+                if (allAgents != null) allAgents.Clear();
+                if (usedAgentNames != null) usedAgentNames.Clear();
+                if (nameCounters != null) nameCounters.Clear();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Exception during collection cleanup: {e.Message}");
+            }
             
             // Reset singleton instance if this is the current instance
             if (_instance == this)
@@ -588,7 +634,14 @@ namespace AIWorld.Managers
             
             #if UNITY_EDITOR
             // Unsubscribe from play mode state changes in editor
-            UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            try
+            {
+                UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Exception during event unsubscription: {e.Message}");
+            }
             #endif
             
             Debug.Log("🗑️ GameManager destroyed and cleaned up");
@@ -610,6 +663,9 @@ namespace AIWorld.Managers
                         StopSimulation();
                     }
                     
+                    // Cancel all invokes
+                    CancelInvoke();
+                    
                     // Clear references
                     if (agentRegistry != null) agentRegistry.Clear();
                     if (agentsByName != null) agentsByName.Clear();
@@ -617,7 +673,14 @@ namespace AIWorld.Managers
                     if (usedAgentNames != null) usedAgentNames.Clear();
                     if (nameCounters != null) nameCounters.Clear();
                     
+                    // Reset singleton instance
                     _instance = null;
+                    
+                    // Force destroy the GameObject to prevent "not cleaned up" warning
+                    if (gameObject != null)
+                    {
+                        DestroyImmediate(gameObject);
+                    }
                 }
             }
         }
@@ -625,11 +688,25 @@ namespace AIWorld.Managers
         
         private void OnApplicationQuit()
         {
+            // Set quitting flag to prevent any new operations
+            isQuitting = true;
+            isDestroying = true;
+            
             // Ensure clean shutdown when application quits
             if (IsSimulationRunning)
             {
-                StopSimulation();
+                try
+                {
+                    StopSimulation();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Exception during application quit cleanup: {e.Message}");
+                }
             }
+            
+            // Cancel any remaining invokes
+            CancelInvoke();
         }
     }
 }

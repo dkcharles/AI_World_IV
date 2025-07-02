@@ -10,9 +10,26 @@ namespace AIWorld.Data
     public class AgentPersonality : ScriptableObject
     {
         [Header("Basic Identity")]
+        [SerializeField] private string agentId; // Unique identifier - auto-generated
         public string agentName = "Agent";
         public string role = "Researcher";
         public string background = "A curious researcher interested in AI and innovation.";
+        
+        // Property to access agentId (read-only from outside)
+        public string AgentId 
+        {
+            get 
+            {
+                if (string.IsNullOrEmpty(agentId))
+                {
+                    agentId = System.Guid.NewGuid().ToString("N")[..8]; // Short 8-character ID
+                    #if UNITY_EDITOR
+                    UnityEditor.EditorUtility.SetDirty(this); // Mark for saving
+                    #endif
+                }
+                return agentId;
+            }
+        }
         
         [Header("Personality Traits (0-1)")]
         [Range(0f, 1f)] public float extraversion = 0.5f;

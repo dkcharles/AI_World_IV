@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bf7bbf68cf138c44a81e6e2efd54a2ac, type: 3}
   m_Name: Emma_Social
   m_EditorClassIdentifier: 
-  agentName: Agent
+  agentName: Emma Rodriguez
   role: Researcher
   background: A curious researcher interested in AI and innovation.
   extraversion: 0.5
