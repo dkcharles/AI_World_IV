@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 using AIWorld.Agents;
 using AIWorld.Needs;
 
@@ -38,6 +39,12 @@ namespace AIWorld.Environment
         public bool logInteractions = true;
         public bool showDebugGizmos = true;
         
+        [Header("NavMesh Configuration")]
+        public bool autoSetupNavMeshObstacle = true;
+        public bool isWalkableObject = false;
+        public bool customObstacleSize = false;
+        public Vector3 obstacleSize = Vector3.one;
+        
         // State tracking
         private HashSet<Agent> discoveredByAgents = new HashSet<Agent>();
         protected List<Agent> currentUsers = new List<Agent>();
@@ -53,6 +60,12 @@ namespace AIWorld.Environment
         protected virtual void Start()
         {
             UpdateVisualState();
+            
+            // Setup NavMesh components
+            if (autoSetupNavMeshObstacle)
+            {
+                SetupNavMeshComponents();
+            }
             
             if (logInteractions)
             {
@@ -314,6 +327,152 @@ namespace AIWorld.Environment
         protected virtual void OnInteractionStarted(Agent agent) { }
         protected virtual void OnInteractionCompleted(Agent agent) { }
         protected virtual void OnInteractionStopped(Agent agent) { }
+        
+        /// <summary>
+        /// Setup NavMesh components for proper agent navigation
+        /// </summary>
+        protected virtual void SetupNavMeshComponents()
+        {
+            if (isWalkableObject)
+            {
+                SetupNavMeshSurface();
+            }
+            else
+            {
+                SetupNavMeshObstacle();
+            }
+        }
+        
+        /// <summary>
+        /// Setup NavMesh surface for walkable objects (using built-in system)
+        /// </summary>
+        private void SetupNavMeshSurface()
+        {
+            // For built-in NavMesh, we ensure object is properly configured for baking
+            // Set appropriate layer for NavMesh baking
+            if (gameObject.layer == 0) // Default layer
+            {
+                // Objects should be on a layer included in NavMesh baking
+                if (logInteractions)
+                {
+                    Debug.Log($"🗺️ {objectName}: Configured as walkable surface for built-in NavMesh");
+                }
+            }
+            
+            // Ensure object has a renderer for NavMesh baking
+            if (GetComponent<Renderer>() == null)
+            {
+                Debug.LogWarning($"⚠️ {objectName}: Walkable object has no renderer - NavMesh baking may not include this object");
+            }
+        }
+        
+        /// <summary>
+        /// Setup NavMesh obstacle for non-walkable objects
+        /// </summary>
+        private void SetupNavMeshObstacle()
+        {
+            NavMeshObstacle obstacle = GetComponent<NavMeshObstacle>();
+            if (obstacle == null)
+            {
+                obstacle = gameObject.AddComponent<NavMeshObstacle>();
+                
+                if (logInteractions)
+                {
+                    Debug.Log($"🚧 {objectName}: Added NavMeshObstacle");
+                }
+            }
+            
+            // Configure obstacle based on object properties
+            ConfigureNavMeshObstacle(obstacle);
+        }
+        
+        /// <summary>
+        /// Configure NavMesh obstacle with appropriate settings
+        /// </summary>
+        private void ConfigureNavMeshObstacle(NavMeshObstacle obstacle)
+        {
+            if (customObstacleSize)
+            {
+                obstacle.size = obstacleSize;
+                obstacle.center = Vector3.zero;
+            }
+            else
+            {
+                // Auto-configure based on collider or renderer
+                Collider col = GetComponent<Collider>();
+                if (col != null)
+                {
+                    obstacle.size = col.bounds.size;
+                    obstacle.center = col.bounds.center - transform.position;
+                }
+                else
+                {
+                    Renderer renderer = GetComponent<Renderer>();
+                    if (renderer != null)
+                    {
+                        obstacle.size = renderer.bounds.size;
+                        obstacle.center = renderer.bounds.center - transform.position;
+                    }
+                    else
+                    {
+                        // Default size for interactive objects
+                        obstacle.size = new Vector3(2f, 2f, 2f);
+                        obstacle.center = Vector3.zero;
+                    }
+                }
+            }
+            
+            // Configure obstacle behaviour
+            obstacle.carving = true;
+            obstacle.shape = NavMeshObstacleShape.Box;
+            
+            // Adjust based on interaction type
+            switch (primaryInteractionType)
+            {
+                case InteractionType.Rest:
+                    obstacle.carving = false; // Rest areas might be walkable around
+                    break;
+                case InteractionType.Socialize:
+                    obstacle.carving = false; // Social hubs should allow gathering
+                    break;
+                default:
+                    obstacle.carving = true; // Most objects should carve the NavMesh
+                    break;
+            }
+            
+            if (logInteractions)
+            {
+                Debug.Log($"🔧 {objectName}: NavMeshObstacle configured - Size: {obstacle.size}, Carving: {obstacle.carving}");
+            }
+        }
+        
+        /// <summary>
+        /// Manually trigger NavMesh component setup
+        /// </summary>
+        [ContextMenu("Setup NavMesh Components")]
+        public void ManualNavMeshSetup()
+        {
+            SetupNavMeshComponents();
+            Debug.Log($"🔄 {objectName}: Manual NavMesh setup completed");
+        }
+        
+        /// <summary>
+        /// Toggle between walkable and obstacle modes
+        /// </summary>
+        [ContextMenu("Toggle Walkable/Obstacle")]
+        public void ToggleNavMeshMode()
+        {
+            isWalkableObject = !isWalkableObject;
+            
+            // Remove existing obstacle components (surfaces are handled differently in built-in system)
+            NavMeshObstacle obstacle = GetComponent<NavMeshObstacle>();
+            if (obstacle != null) DestroyImmediate(obstacle);
+            
+            // Setup new component
+            SetupNavMeshComponents();
+            
+            Debug.Log($"🔄 {objectName}: Switched to {(isWalkableObject ? "Walkable" : "Obstacle")} mode");
+        }
         
         /// <summary>
         /// Debug visualization

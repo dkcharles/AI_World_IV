@@ -17,6 +17,7 @@ namespace AIWorld.BDI
         public string predicate;           // What the belief is about (e.g., "location_of")
         public string[] arguments;         // Arguments (e.g., ["apple", "kitchen"])
         public string description;         // Human-readable description
+        public string category;            // Category of belief for organization
         
         [Header("Belief Properties")]
         [Range(0f, 1f)] public float confidence = 1f;  // How confident we are (0-1)
@@ -26,12 +27,15 @@ namespace AIWorld.BDI
         [Header("Temporal Info")]
         public DateTime created;
         public DateTime lastUpdated;
+        public DateTime timestamp;         // Alias for lastUpdated for compatibility
         public float timeToLive = -1f;     // -1 means permanent
         
         public Belief()
         {
             created = DateTime.Now;
             lastUpdated = DateTime.Now;
+            timestamp = DateTime.Now;
+            category = "general";
         }
         
         public Belief(string predicate, string[] arguments, float confidence = 1f) : this()
@@ -51,6 +55,7 @@ namespace AIWorld.BDI
             confidence = confidence * (1f - evidenceWeight) + evidence * evidenceWeight;
             confidence = Mathf.Clamp01(confidence);
             lastUpdated = DateTime.Now;
+            timestamp = DateTime.Now;
         }
         
         /// <summary>
@@ -170,6 +175,8 @@ namespace AIWorld.BDI
         public string intentionName;
         public string description;
         public Desire sourceDesire;
+        public string intentionType = "generic";    // Type of intention for categorization
+        public float priority = 0.5f;              // Priority level (0-1)
         
         [Header("Plan Information")]
         public List<string> plannedActions = new List<string>();
@@ -197,6 +204,25 @@ namespace AIWorld.BDI
             intentionName = name;
             sourceDesire = desire;
             description = $"Achieve: {desire.description}";
+        }
+        
+        public Intention(string name, string description, float priority) : this()
+        {
+            intentionName = name;
+            this.description = description;
+            this.priority = priority;
+            commitmentStrength = priority;
+        }
+        
+        /// <summary>
+        /// Set the action plan for this intention
+        /// </summary>
+        public void SetActionPlan(string[] actions)
+        {
+            plannedActions.Clear();
+            plannedActions.AddRange(actions);
+            currentActionIndex = 0;
+            progress = 0f;
         }
         
         /// <summary>

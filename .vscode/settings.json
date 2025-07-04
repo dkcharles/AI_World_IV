@@ -56,5 +56,8 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "AI_World_IV.sln"
+    "dotnet.defaultSolution": "AI_World_IV.sln",
+    "cSpell.words": [
+        "Mathf"
+    ]
 }

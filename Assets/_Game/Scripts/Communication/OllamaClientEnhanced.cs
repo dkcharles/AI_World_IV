@@ -19,6 +19,12 @@ namespace AIWorld.Communication
         public bool enableTaskRouting = true;
         public bool logModelSelection = true;
         
+        [Header("Response Quality Control")]
+        public bool enableCompletenessValidation = true;
+        public bool autoRetryTruncated = true;
+        public int maxRetryAttempts = 2;
+        public float truncationThreshold = 0.8f; // 80% of expected length
+        
         [Header("Model Routing Settings")]
         public string forceModel = ""; // Leave empty for automatic selection
         public TaskUrgency defaultUrgency = TaskUrgency.Normal;
@@ -56,6 +62,184 @@ namespace AIWorld.Communication
             InnerDialogue,
             SelfReflection
         }
+        
+        #region Response Quality Control
+        
+        // Retry tracking
+        private Dictionary<string, int> retryCountByAgent = new Dictionary<string, int>();
+        
+        /// <summary>
+        /// Validate if response appears complete based on expected length and content
+        /// </summary>
+        private bool ValidateResponseCompleteness(EnhancedLLMResponse response, TaskType taskType)
+        {
+            if (response == null || string.IsNullOrEmpty(response.content))
+                return false;
+            
+            // Check if response metadata indicates completeness
+            if (response.responseMetadata != null)
+            {
+                if (!response.responseMetadata.seemsComplete)
+                {
+                    Debug.LogWarning($"⚠️ Server indicates response is incomplete");
+                    return false;
+                }
+                
+                // Check against expected token usage
+                int expectedTokens = GetTokensForTask(taskType);
+                if (response.responseMetadata.tokensUsed < expectedTokens * truncationThreshold)
+                {
+                    Debug.LogWarning($"⚠️ Token usage ({response.responseMetadata.tokensUsed}) below threshold ({expectedTokens * truncationThreshold:F0})");
+                    return false;
+                }
+            }
+            
+            // Content-based validation
+            string content = response.content.Trim();
+            
+            // Check for common truncation indicators
+            if (content.EndsWith("...") || content.EndsWith("…") || 
+                content.EndsWith("[truncated]") || content.EndsWith("[cut off]"))
+            {
+                Debug.LogWarning($"⚠️ Content contains truncation indicators");
+                return false;
+            }
+            
+            // Check for incomplete sentences (basic heuristic)
+            if (!content.EndsWith(".") && !content.EndsWith("!") && !content.EndsWith("?") && 
+                !content.EndsWith('"') && !content.EndsWith("'") && content.Length > 20)
+            {
+                // If content is substantial but doesn't end properly, might be truncated
+                Debug.LogWarning($"⚠️ Content may be incomplete (no proper ending)");
+                return false;
+            }
+            
+            // Check minimum expected length for task type
+            int minExpectedLength = GetMinimumExpectedLength(taskType);
+            if (content.Length < minExpectedLength)
+            {
+                Debug.LogWarning($"⚠️ Content too short ({content.Length} < {minExpectedLength} expected)");
+                return false;
+            }
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// Get minimum expected response length for task type
+        /// </summary>
+        private int GetMinimumExpectedLength(TaskType taskType)
+        {
+            return taskType switch
+            {
+                TaskType.BDIReasoning => 200,
+                TaskType.GoalPlanning => 150,
+                TaskType.LongConversation => 300,
+                TaskType.PersonalityExpression => 200,
+                TaskType.EmotionalResponse => 150,
+                TaskType.Conversation => 100,
+                TaskType.InnerDialogue => 150,
+                TaskType.SelfReflection => 200,
+                TaskType.MemoryRetrieval => 150,
+                TaskType.ContextMaintenance => 150,
+                TaskType.StatusUpdate => 30,
+                TaskType.SimpleAcknowledgment => 15,
+                TaskType.ReactiveResponse => 50,
+                _ => 80
+            };
+        }
+        
+        /// <summary>
+        /// Retry request with increased token limits
+        /// </summary>
+        private IEnumerator RetryRequestWithIncreasedTokens(
+            EnhancedChatRequest requestData,
+            System.Action<LLMResponse> callback,
+            string url)
+        {
+            Debug.Log($"🔄 Retrying with increased tokens: {requestData.tokenHint}");
+            
+            string jsonData = JsonUtility.ToJson(requestData);
+            
+            using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
+            {
+                byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonData);
+                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                request.timeout = 150; // Increased timeout for retry
+                
+                yield return request.SendWebRequest();
+                
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    try
+                    {
+                        var response = JsonUtility.FromJson<EnhancedLLMResponse>(request.downloadHandler.text);
+                        
+                        Debug.Log($"✅ Retry successful. Response length: {response.content?.Length ?? 0}");
+                        
+                        var standardResponse = new LLMResponse
+                        {
+                            success = response.success,
+                            content = response.content,
+                            emotionalTone = response.emotionalTone,
+                            error = response.error
+                        };
+                        
+                        callback?.Invoke(standardResponse);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"❌ Retry parse error: {e.Message}");
+                        callback?.Invoke(new LLMResponse
+                        {
+                            success = false,
+                            error = $"Retry parse error: {e.Message}"
+                        });
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"❌ Retry request failed: {request.error}");
+                    callback?.Invoke(new LLMResponse
+                    {
+                        success = false,
+                        error = $"Retry failed: {request.error}"
+                    });
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Get retry count for agent
+        /// </summary>
+        private int GetRetryCount(string agentId)
+        {
+            return retryCountByAgent.ContainsKey(agentId) ? retryCountByAgent[agentId] : 0;
+        }
+        
+        /// <summary>
+        /// Increment retry count for agent
+        /// </summary>
+        private void IncrementRetryCount(string agentId)
+        {
+            if (retryCountByAgent.ContainsKey(agentId))
+                retryCountByAgent[agentId]++;
+            else
+                retryCountByAgent[agentId] = 1;
+        }
+        
+        /// <summary>
+        /// Reset retry count for agent
+        /// </summary>
+        private void ResetRetryCount(string agentId)
+        {
+            if (retryCountByAgent.ContainsKey(agentId))
+                retryCountByAgent[agentId] = 0;
+        }
+        
+        #endregion
         
         public enum TaskUrgency
         {
@@ -189,6 +373,30 @@ namespace AIWorld.Communication
                         }
                         
                         Debug.Log($"🔄 Converting to standard response...");
+                        // Validate response completeness before proceeding
+                        bool isComplete = ValidateResponseCompleteness(response, taskType);
+                        if (!isComplete && enableCompletenessValidation)
+                        {
+                            Debug.LogWarning($"⚠️ Response appears incomplete. Length: {response.content?.Length ?? 0}");
+                            
+                            if (autoRetryTruncated && GetRetryCount(agentId) < maxRetryAttempts)
+                            {
+                                Debug.Log($"🔄 Retrying truncated response (attempt {GetRetryCount(agentId) + 1}/{maxRetryAttempts})");
+                                IncrementRetryCount(agentId);
+                                
+                                // Retry with increased token limit
+                                var retryRequest = requestData;
+                                retryRequest.tokenHint = Mathf.RoundToInt(requestData.tokenHint * 1.5f);
+                                
+                                StartCoroutine(RetryRequestWithIncreasedTokens(
+                                    retryRequest, callback, url));
+                                yield break;
+                            }
+                        }
+                        
+                        // Reset retry count on successful response
+                        ResetRetryCount(agentId);
+                        
                         // Convert to standard LLMResponse for compatibility
                         var standardResponse = new LLMResponse
                         {
@@ -399,24 +607,25 @@ namespace AIWorld.Communication
         
         private int GetTokensForTask(TaskType taskType)
         {
+            // ENHANCED: Increased token limits to prevent truncation
             // Unity provides hints, but server will optimize based on selected model
-            // These are reasonable baseline hints for any model
+            // These are generous baseline hints to ensure complete responses
             return taskType switch
             {
-                TaskType.BDIReasoning => 600,       // Complex reasoning (server will boost for Qwen3)
-                TaskType.GoalPlanning => 550,        // Planning complexity
-                TaskType.LongConversation => 800,    // Extended dialogue (server will boost for Llama3.2)
-                TaskType.PersonalityExpression => 600, // Rich personality (server will optimize per model)
-                TaskType.EmotionalResponse => 500,   // Emotional depth
-                TaskType.Conversation => 500,        // Standard dialogue
-                TaskType.InnerDialogue => 500,       // Reflection depth
-                TaskType.SelfReflection => 550,      // Deep thoughts
-                TaskType.MemoryRetrieval => 600,     // Memory complexity
-                TaskType.ContextMaintenance => 550,  // Context handling
-                TaskType.StatusUpdate => 200,        // Brief updates (server will reduce for Gemma3)
-                TaskType.SimpleAcknowledgment => 150, // Very brief (server will minimize for Gemma3)
-                TaskType.ReactiveResponse => 250,    // Quick responses (server optimizes for speed)
-                _ => 450 // Reasonable default
+                TaskType.BDIReasoning => 1000,       // Complex reasoning (server will boost for Qwen3)
+                TaskType.GoalPlanning => 900,         // Planning complexity
+                TaskType.LongConversation => 1200,    // Extended dialogue (server will boost for Llama3.2)
+                TaskType.PersonalityExpression => 900, // Rich personality (server will optimize per model)
+                TaskType.EmotionalResponse => 700,    // Emotional depth
+                TaskType.Conversation => 700,         // Standard dialogue (increased from 500)
+                TaskType.InnerDialogue => 800,        // Reflection depth (increased from 500)
+                TaskType.SelfReflection => 850,       // Deep thoughts
+                TaskType.MemoryRetrieval => 800,      // Memory complexity
+                TaskType.ContextMaintenance => 750,   // Context handling
+                TaskType.StatusUpdate => 400,         // Brief updates (increased from 200)
+                TaskType.SimpleAcknowledgment => 300, // Short responses (increased from 150)
+                TaskType.ReactiveResponse => 500,     // Quick responses (increased from 250)
+                _ => 700 // Reasonable default (increased from 450)
             };
         }
         

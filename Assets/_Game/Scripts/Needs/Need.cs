@@ -150,6 +150,14 @@ namespace AIWorld.Needs
         public bool IsSatisfied => !isActive || currentSatisfaction >= satisfiedThreshold;
         
         /// <summary>
+        /// Get current satisfaction level (0-1)
+        /// </summary>
+        public float GetSatisfactionLevel()
+        {
+            return currentSatisfaction;
+        }
+        
+        /// <summary>
         /// Get a description of the current need state
         /// </summary>
         public string GetStateDescription()

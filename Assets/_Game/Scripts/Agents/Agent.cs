@@ -48,6 +48,7 @@ namespace AIWorld.Agents
         // Enhanced AI components
         private OllamaClientEnhanced enhancedLLMClient;
         private OllamaClient fallbackLLMClient; // Backup for compatibility
+        private IntelligentTopicManager topicManager;
         
         // Core components
         private NeedsManager needsManager;
@@ -186,6 +187,17 @@ namespace AIWorld.Agents
             {
                 Debug.LogError($"❌ {AgentName}: No AI client found in scene!");
                 return;
+            }
+            
+            // Get intelligent topic manager
+            topicManager = FindFirstObjectByType<IntelligentTopicManager>();
+            if (topicManager != null)
+            {
+                Debug.Log($"🎭 {AgentName}: Connected to Intelligent Topic Manager");
+            }
+            else
+            {
+                Debug.LogWarning($"⚠️ {AgentName}: No Topic Manager found - conversations may be repetitive");
             }
         }
         
@@ -492,6 +504,78 @@ namespace AIWorld.Agents
         
         #endregion
         
+        #region Fallback Topic Generation Methods
+        
+        /// <summary>
+        /// Add basic inner dialogue context when topic manager is not available
+        /// </summary>
+        private void AddBasicInnerDialogueContext(List<string> context)
+        {
+            // Basic self-reflection prompts
+            if (enableCognitiveArchitecture && needsManager != null)
+            {
+                var urgentNeeds = needsManager.activeNeeds.Where(n => n.GetUrgency() > 0.6f).ToList();
+                if (urgentNeeds.Count > 0)
+                {
+                    var mostUrgent = urgentNeeds.OrderByDescending(n => n.GetUrgency()).First();
+                    context.Add($"You're feeling a strong need for {mostUrgent.needName}. Reflect on this.");
+                }
+            }
+            
+            if (bdiEngine != null && bdiEngine.Beliefs.Count > 0)
+            {
+                var recentBelief = bdiEngine.Beliefs.OrderByDescending(b => b.timestamp).First();
+                context.Add($"Consider your recent realization: {recentBelief.description}");
+            }
+        }
+        
+        /// <summary>
+        /// Add basic communication context when topic manager is not available
+        /// </summary>
+        private void AddBasicCommunicationContext(List<string> context, Agent targetAgent)
+        {
+            // Find common ground or complementary traits
+            if (Personality != null && targetAgent.Personality != null)
+            {
+                // Check for common interests
+                if (Personality.primaryInterests != null && targetAgent.Personality.primaryInterests != null)
+                {
+                    var commonInterests = Personality.primaryInterests.Intersect(targetAgent.Personality.primaryInterests);
+                    if (commonInterests.Any())
+                    {
+                        var interest = commonInterests.First();
+                        context.Add($"You both share an interest in {interest}. This could be a great conversation topic.");
+                        return;
+                    }
+                }
+                
+                // Check personality compatibility
+                float extraversionDiff = Mathf.Abs(Personality.extraversion - targetAgent.Personality.extraversion);
+                if (extraversionDiff < 0.3f)
+                {
+                    if (Personality.extraversion > 0.6f)
+                    {
+                        context.Add("You're both outgoing people. Consider having an energetic, engaging conversation.");
+                    }
+                    else
+                    {
+                        context.Add("You both prefer quieter interactions. Consider a thoughtful, deeper conversation.");
+                    }
+                }
+            }
+            
+            // Fallback to basic prompts
+            string[] basicPrompts = {
+                "Consider starting with a friendly greeting and see where the conversation naturally leads.",
+                "Think about sharing something you've been working on or are curious about.",
+                "Ask about their experiences or perspective on something meaningful."
+            };
+            
+            context.Add(basicPrompts[Random.Range(0, basicPrompts.Length)]);
+        }
+        
+        #endregion
+        
         #region Task Type Determination (Location-Aware)
         
         private OllamaClientEnhanced.TaskType DetermineInnerDialogueTaskType()
@@ -624,6 +708,18 @@ namespace AIWorld.Agents
             
             context.Add($"You are {AgentName}, currently in {currentLocation}.");
             
+            // Use intelligent topic manager for diverse inner dialogue
+            if (topicManager != null)
+            {
+                string intelligentTopic = topicManager.GenerateInnerDialogueTopic(this);
+                context.Add($"Consider this thought-provoking topic: {intelligentTopic}");
+            }
+            else
+            {
+                // Fallback to basic context generation
+                AddBasicInnerDialogueContext(context);
+            }
+            
             // Add location-specific context
             if (!string.IsNullOrEmpty(currentLocation))
             {
@@ -676,6 +772,18 @@ namespace AIWorld.Agents
             List<string> context = new List<string>();
             
             context.Add($"You see {targetAgent.AgentName} in {currentLocation}.");
+            
+            // Use intelligent topic manager for diverse conversations
+            if (topicManager != null)
+            {
+                string intelligentTopic = topicManager.GenerateConversationTopic(this, targetAgent, currentLocation);
+                context.Add($"Here's an interesting conversation starter: {intelligentTopic}");
+            }
+            else
+            {
+                // Fallback to basic context generation
+                AddBasicCommunicationContext(context, targetAgent);
+            }
             
             // Add location-specific communication style
             if (!string.IsNullOrEmpty(currentLocation))

@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 904cee78092cb5147a7c24361f373094, type: 3}
+  m_Name: University_World_Config
+  m_EditorClassIdentifier: 
+  simulationContext: 0
+  worldSize: {x: 50, y: 50}
+  generateLocationsAutomatically: 1
+  generateResourcesAutomatically: 1
+  locationPrefabs: []
+  resourcePrefabs: []
+  environmentMaterials: []
+  predefinedLocations: []
+  predefinedResources: []
+  maxResourceInstances: 15
+  minLocationSpacing: 5
+  minResourceSpacing: 3
+  decorativePrefabs: []
+  decorationDensity: 10
+  ambientLightColor: {r: 1, g: 1, b: 1, a: 1}
+  competitionLevel: 1
+  cooperationBonus: 1
+  resourceScarcityMultiplier: 1
+  socialImportance: 0.5

@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f2cba0e33e46404c892e1c2240f0e92, type: 3}
+  m_Name: University_Conflict_Config
+  m_EditorClassIdentifier: 
+  enableConflictSystem: 1
+  baseConflictProbability: 0.2
+  conflictCheckInterval: 30
+  maxConflictIntensity: 1
+  enableResourceConflicts: 1
+  enablePersonalityConflicts: 1
+  enableTerritorialConflicts: 0
+  enableGoalConflicts: 0
+  escalationProbability: 0.3
+  deEscalationRate: 0.1
+  conflictMemoryDuration: 300
+  resourceCompetitionWeight: 1
+  personalityClashWeight: 1
+  territorialWeight: 1
+  goalConflictWeight: 1
+  stressEscalationRate: 0.4
+  cooperationPenalty: 0.5
+  conflictMoodImpact: 0.6
+  universityConflictTypes:
+  - Research Competition
+  - Publication Credit
+  - Lab Access
+  - Grant Competition
+  - Academic Disagreement
+  survivalConflictTypes:
+  - Food Competition
+  - Shelter Dispute
+  - Water Access
+  - Territory Claim
+  - Resource Hoarding
+  socialConflictTypes:
+  - Romantic Rivalry
+  - Social Status
+  - Attention Seeking
+  - Personality Clash
+  - Influence Competition

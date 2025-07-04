@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using AIWorld.Agents;
 using AIWorld.Data;
+using AIWorld.Navigation;
 using System.Linq;
 
 namespace AIWorld.Managers
@@ -64,6 +65,11 @@ namespace AIWorld.Managers
         public bool showSimulationStats = true;
         public float statsUpdateInterval = 5f;
         
+        [Header("NavMesh Configuration")]
+        public bool autoSetupNavMesh = true;
+        public float navMeshSetupDelay = 2f;
+        public bool validateNavMeshAfterSetup = true;
+        
         // Agent management
         private Dictionary<string, Agent> agentRegistry;
         private Dictionary<string, Agent> agentsByName; // NEW: Track agents by display name
@@ -77,6 +83,10 @@ namespace AIWorld.Managers
         private int totalMessages = 0;
         private int totalInnerDialogues = 0;
         private float simulationStartTime;
+        
+        // NavMesh management
+        private NavMeshSetupManager navMeshSetupManager;
+        private bool navMeshSetupComplete = false;
         
         // Properties
         public int ActiveAgentCount => allAgents?.Count ?? 0;
@@ -164,6 +174,12 @@ namespace AIWorld.Managers
             
             Debug.Log($"🚀 AI World Simulation started with {ActiveAgentCount} agents");
             LogAgentIdentitySummary();
+            
+            // Setup NavMesh for proper agent navigation
+            if (autoSetupNavMesh)
+            {
+                StartCoroutine(SetupNavMeshAfterDelay());
+            }
             
             // Log initial agent states
             if (allAgents != null)
@@ -685,6 +701,116 @@ namespace AIWorld.Managers
             }
         }
         #endif
+        
+        /// <summary>
+        /// Setup NavMesh after a delay to allow world generation to complete
+        /// </summary>
+        private System.Collections.IEnumerator SetupNavMeshAfterDelay()
+        {
+            yield return new WaitForSeconds(navMeshSetupDelay);
+            
+            Debug.Log("🗺️ Starting NavMesh setup for agent navigation...");
+            
+            // Find or create NavMeshSetupManager
+            navMeshSetupManager = FindFirstObjectByType<NavMeshSetupManager>();
+            if (navMeshSetupManager == null)
+            {
+                GameObject navMeshManagerObj = new GameObject("NavMeshSetupManager");
+                navMeshSetupManager = navMeshManagerObj.AddComponent<NavMeshSetupManager>();
+                Debug.Log("🔧 Created NavMeshSetupManager");
+            }
+            
+            // Setup NavMesh
+            navMeshSetupManager.SetupNavMesh();
+            
+            // Wait for setup completion
+            while (!navMeshSetupManager.IsSetupComplete)
+            {
+                yield return new WaitForSeconds(0.5f);
+            }
+            
+            navMeshSetupComplete = true;
+            Debug.Log("✅ NavMesh setup completed");
+            
+            // Validate agent navigation after setup
+            if (validateNavMeshAfterSetup)
+            {
+                ValidateAgentNavigation();
+            }
+        }
+        
+        /// <summary>
+        /// Validate that all agents can navigate properly
+        /// </summary>
+        private void ValidateAgentNavigation()
+        {
+            Debug.Log("🔍 Validating agent navigation...");
+            
+            int validAgents = 0;
+            int invalidAgents = 0;
+            
+            foreach (var agent in allAgents)
+            {
+                if (agent != null)
+                {
+                    var agentMovement = agent.GetComponent<AIWorld.Movement.AgentMovement>();
+                    if (agentMovement != null && agentMovement.ValidateNavMeshSetup())
+                    {
+                        validAgents++;
+                    }
+                    else
+                    {
+                        invalidAgents++;
+                        Debug.LogWarning($"⚠️ {agent.AgentName}: Navigation validation failed");
+                    }
+                }
+            }
+            
+            Debug.Log($"📊 Navigation Validation: {validAgents} valid, {invalidAgents} invalid agents");
+        }
+        
+        /// <summary>
+        /// Manually trigger NavMesh setup
+        /// </summary>
+        [ContextMenu("Setup NavMesh")]
+        public void ManualNavMeshSetup()
+        {
+            if (navMeshSetupManager == null)
+            {
+                navMeshSetupManager = FindFirstObjectByType<NavMeshSetupManager>();
+                if (navMeshSetupManager == null)
+                {
+                    GameObject navMeshManagerObj = new GameObject("NavMeshSetupManager");
+                    navMeshSetupManager = navMeshManagerObj.AddComponent<NavMeshSetupManager>();
+                }
+            }
+            
+            navMeshSetupManager.SetupNavMesh();
+            Debug.Log("🔄 Manual NavMesh setup triggered");
+        }
+        
+        /// <summary>
+        /// Check if NavMesh is properly set up
+        /// </summary>
+        public bool IsNavMeshReady()
+        {
+            return navMeshSetupComplete && navMeshSetupManager != null && navMeshSetupManager.IsSetupComplete;
+        }
+        
+        /// <summary>
+        /// Get NavMesh setup status for debugging
+        /// </summary>
+        public string GetNavMeshStatus()
+        {
+            if (navMeshSetupManager == null) return "NavMeshSetupManager not found";
+            
+            string status = $"Setup Complete: {navMeshSetupManager.IsSetupComplete}\n";
+            status += $"Ground Objects: {navMeshSetupManager.TotalGroundObjects}\n";
+            status += $"Obstacles: {navMeshSetupManager.TotalObstacles}\n";
+            status += $"Agents: {navMeshSetupManager.TotalAgents}";
+            
+            return status;
+        }
         
         private void OnApplicationQuit()
         {
