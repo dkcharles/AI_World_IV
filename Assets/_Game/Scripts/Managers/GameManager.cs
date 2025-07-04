@@ -2,12 +2,14 @@ using System.Collections.Generic;
 using UnityEngine;
 using AIWorld.Agents;
 using AIWorld.Data;
+using AIWorld.Navigation;
+using System.Linq;
 
 namespace AIWorld.Managers
 {
     /// <summary>
-    /// Singleton GameManager that coordinates all agents and manages the simulation
-    /// Provides central access to agent registry and simulation control
+    /// Enhanced GameManager with agent identity validation and unique name enforcement
+    /// Prevents duplicate agent names and provides comprehensive agent management
     /// </summary>
     public class GameManager : MonoBehaviour
     {
@@ -16,16 +18,34 @@ namespace AIWorld.Managers
         {
             get
             {
+                // Don't create new instances during application quit or when destroying
+                if (Application.isPlaying == false) return null;
+                
                 if (_instance == null)
                 {
                     _instance = FindFirstObjectByType<GameManager>();
                     if (_instance == null)
                     {
-                        GameObject gameManagerObject = new GameObject("GameManager");
-                        _instance = gameManagerObject.AddComponent<GameManager>();
-                        DontDestroyOnLoad(gameManagerObject);
+                        // Don't create new instances if we're quitting
+                        if (Application.isPlaying)
+                        {
+                            GameObject gameManagerObject = new GameObject("GameManager");
+                            _instance = gameManagerObject.AddComponent<GameManager>();
+                            
+                            // Only use DontDestroyOnLoad in builds, not in editor
+                            #if !UNITY_EDITOR
+                            DontDestroyOnLoad(gameManagerObject);
+                            #endif
+                        }
                     }
                 }
+                
+                // Return null if the instance is being destroyed
+                if (_instance != null && _instance.isDestroying)
+                {
+                    return null;
+                }
+                
                 return _instance;
             }
         }
@@ -35,24 +55,47 @@ namespace AIWorld.Managers
         public float simulationSpeed = 1f;
         public int maxAgentCount = 10;
         
+        [Header("Identity Management")]
+        public bool enforceUniqueNames = true;
+        public bool autoFixDuplicateNames = true;
+        public bool logIdentityValidation = true;
+        
         [Header("Debug & Monitoring")]
         public bool logAgentRegistration = true;
         public bool showSimulationStats = true;
         public float statsUpdateInterval = 5f;
         
+        [Header("NavMesh Configuration")]
+        public bool autoSetupNavMesh = true;
+        public float navMeshSetupDelay = 2f;
+        public bool validateNavMeshAfterSetup = true;
+        
         // Agent management
         private Dictionary<string, Agent> agentRegistry;
+        private Dictionary<string, Agent> agentsByName; // NEW: Track agents by display name
         private List<Agent> allAgents;
+        
+        // Identity tracking
+        private HashSet<string> usedAgentNames;
+        private Dictionary<string, int> nameCounters; // For auto-fixing duplicates
         
         // Simulation stats
         private int totalMessages = 0;
         private int totalInnerDialogues = 0;
         private float simulationStartTime;
         
+        // NavMesh management
+        private NavMeshSetupManager navMeshSetupManager;
+        private bool navMeshSetupComplete = false;
+        
         // Properties
         public int ActiveAgentCount => allAgents?.Count ?? 0;
         public bool IsSimulationRunning { get; private set; }
         public float SimulationTime => Time.time - simulationStartTime;
+        
+        // Destruction safety
+        private bool isDestroying = false;
+        private bool isQuitting = false;
         
         private void Awake()
         {
@@ -60,7 +103,12 @@ namespace AIWorld.Managers
             if (_instance == null)
             {
                 _instance = this;
+                
+                // Only use DontDestroyOnLoad in builds, not in editor
+                #if !UNITY_EDITOR
                 DontDestroyOnLoad(gameObject);
+                #endif
+                
                 Initialize();
                 
                 #if UNITY_EDITOR
@@ -90,14 +138,17 @@ namespace AIWorld.Managers
         }
         
         /// <summary>
-        /// Initialize the GameManager
+        /// Initialize the GameManager with enhanced identity tracking
         /// </summary>
         private void Initialize()
         {
             agentRegistry = new Dictionary<string, Agent>();
+            agentsByName = new Dictionary<string, Agent>();
             allAgents = new List<Agent>();
+            usedAgentNames = new HashSet<string>();
+            nameCounters = new Dictionary<string, int>();
             
-            Debug.Log("🎮 GameManager initialized");
+            Debug.Log("🎮 GameManager initialized with identity validation");
         }
         
         /// <summary>
@@ -114,11 +165,21 @@ namespace AIWorld.Managers
             // Ensure collections are initialized
             if (allAgents == null) Initialize();
             
+            // Validate all agent identities before starting
+            ValidateAllAgentIdentities();
+            
             simulationStartTime = Time.time;
             IsSimulationRunning = true;
             Time.timeScale = simulationSpeed;
             
             Debug.Log($"🚀 AI World Simulation started with {ActiveAgentCount} agents");
+            LogAgentIdentitySummary();
+            
+            // Setup NavMesh for proper agent navigation
+            if (autoSetupNavMesh)
+            {
+                StartCoroutine(SetupNavMeshAfterDelay());
+            }
             
             // Log initial agent states
             if (allAgents != null)
@@ -164,13 +225,13 @@ namespace AIWorld.Managers
         }
         
         /// <summary>
-        /// Register an agent with the manager
+        /// Register an agent with enhanced identity validation
         /// </summary>
         public void RegisterAgent(Agent agent)
         {
-            if (agent == null)
+            // Safety check: don't register agents if we're being destroyed
+            if (isDestroying || isQuitting || agent == null)
             {
-                Debug.LogError("Cannot register null agent");
                 return;
             }
             
@@ -183,19 +244,183 @@ namespace AIWorld.Managers
                 return;
             }
             
-            if (agentRegistry.ContainsKey(agent.agentId))
+            if (agentRegistry.ContainsKey(agent.AgentId))
             {
-                Debug.LogWarning($"Agent {agent.agentId} is already registered");
+                Debug.LogWarning($"Agent {agent.AgentId} is already registered");
                 return;
             }
             
-            agentRegistry[agent.agentId] = agent;
+            // Validate and potentially fix agent identity
+            string validatedName = ValidateAgentIdentity(agent);
+            
+            // Update agent name if it was changed
+            if (validatedName != agent.AgentName)
+            {
+                Debug.Log($"🔧 Updated agent name: {agent.AgentName} → {validatedName}");
+                // Note: ForceUpdateName method needs to be added to Agent.cs
+                if (agent.GetType().GetMethod("ForceUpdateName") != null)
+                {
+                    agent.GetType().GetMethod("ForceUpdateName").Invoke(agent, new object[] { validatedName });
+                }
+                else
+                {
+                    Debug.LogWarning($"⚠️ Agent.ForceUpdateName method not found. Please add to Agent.cs");
+                }
+            }
+            
+            // Register agent
+            agentRegistry[agent.AgentId] = agent;
+            agentsByName[agent.AgentName] = agent;
             allAgents.Add(agent);
+            usedAgentNames.Add(agent.AgentName);
             
             if (logAgentRegistration)
             {
-                Debug.Log($"✅ Registered agent: {agent.AgentName} (ID: {agent.agentId})");
+                Debug.Log($"✅ Registered agent: {agent.AgentName} (ID: {agent.AgentId})");
             }
+        }
+        
+        /// <summary>
+        /// Validate agent identity and ensure uniqueness
+        /// </summary>
+        private string ValidateAgentIdentity(Agent agent)
+        {
+            string originalName = agent.AgentName;
+            string validatedName = originalName;
+            
+            if (enforceUniqueNames)
+            {
+                // Check for name collision
+                if (usedAgentNames.Contains(originalName) || agentsByName.ContainsKey(originalName))
+                {
+                    if (autoFixDuplicateNames)
+                    {
+                        validatedName = GenerateUniqueVariant(originalName);
+                        
+                        if (logIdentityValidation)
+                        {
+                            Debug.LogWarning($"⚠️ Name collision detected: '{originalName}' → '{validatedName}'");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"❌ Agent name '{originalName}' is already in use! Set autoFixDuplicateNames = true to auto-resolve.");
+                        return originalName; // Return original name, let caller handle
+                    }
+                }
+            }
+            
+            if (logIdentityValidation && validatedName == originalName)
+            {
+                Debug.Log($"✅ Agent identity validated: {validatedName}");
+            }
+            
+            return validatedName;
+        }
+        
+        /// <summary>
+        /// Generate a unique variant of a name by appending a number
+        /// </summary>
+        private string GenerateUniqueVariant(string baseName)
+        {
+            // Extract base name without any existing number suffix
+            string cleanBaseName = baseName;
+            if (System.Text.RegularExpressions.Regex.IsMatch(baseName, @" \d+$"))
+            {
+                cleanBaseName = System.Text.RegularExpressions.Regex.Replace(baseName, @" \d+$", "");
+            }
+            
+            if (!nameCounters.ContainsKey(cleanBaseName))
+            {
+                nameCounters[cleanBaseName] = 1;
+            }
+            
+            string candidate;
+            do
+            {
+                nameCounters[cleanBaseName]++;
+                candidate = $"{cleanBaseName} {nameCounters[cleanBaseName]}";
+            }
+            while (usedAgentNames.Contains(candidate) || agentsByName.ContainsKey(candidate));
+            
+            return candidate;
+        }
+        
+        /// <summary>
+        /// Validate all currently registered agent identities
+        /// </summary>
+        private void ValidateAllAgentIdentities()
+        {
+            if (allAgents == null || allAgents.Count == 0) return;
+            
+            var duplicateGroups = allAgents
+                .Where(a => a != null)
+                .GroupBy(a => a.AgentName)
+                .Where(g => g.Count() > 1);
+            
+            foreach (var group in duplicateGroups)
+            {
+                Debug.LogWarning($"⚠️ Found {group.Count()} agents with name '{group.Key}'");
+                
+                if (autoFixDuplicateNames)
+                {
+                    var agents = group.ToList();
+                    for (int i = 1; i < agents.Count; i++) // Keep first agent's name, rename others
+                    {
+                        string newName = GenerateUniqueVariant(agents[i].AgentName);
+                        string oldName = agents[i].AgentName;
+                        
+                        // Update tracking dictionaries
+                        agentsByName.Remove(oldName);
+                        usedAgentNames.Remove(oldName);
+                        
+                        // Update agent name
+                        if (agents[i].GetType().GetMethod("ForceUpdateName") != null)
+                        {
+                            agents[i].GetType().GetMethod("ForceUpdateName").Invoke(agents[i], new object[] { newName });
+                        }
+                        
+                        agentsByName[newName] = agents[i];
+                        usedAgentNames.Add(newName);
+                        
+                        Debug.Log($"🔧 Auto-fixed duplicate: '{oldName}' → '{newName}'");
+                    }
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Log summary of all agent identities
+        /// </summary>
+        private void LogAgentIdentitySummary()
+        {
+            if (allAgents == null || allAgents.Count == 0) return;
+            
+            Debug.Log("👥 Agent Identity Summary:");
+            foreach (var agent in allAgents)
+            {
+                if (agent != null)
+                {
+                    Debug.Log($"   🤖 {agent.AgentName} ({agent.Personality?.role ?? "Unknown Role"})");
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Check if an agent name is already in use
+        /// </summary>
+        public bool IsNameInUse(string name)
+        {
+            return usedAgentNames.Contains(name) || agentsByName.ContainsKey(name);
+        }
+        
+        /// <summary>
+        /// Get agent by display name
+        /// </summary>
+        public Agent GetAgentByName(string name)
+        {
+            agentsByName.TryGetValue(name, out Agent agent);
+            return agent;
         }
         
         /// <summary>
@@ -203,16 +428,19 @@ namespace AIWorld.Managers
         /// </summary>
         public void UnregisterAgent(Agent agent)
         {
-            if (agent == null) return;
+            // Safety check: still allow unregistration during destruction for cleanup
+            if (agent == null || agentRegistry == null) return;
             
-            if (agentRegistry.ContainsKey(agent.agentId))
+            if (agentRegistry.ContainsKey(agent.AgentId))
             {
-                agentRegistry.Remove(agent.agentId);
-                allAgents.Remove(agent);
+                agentRegistry.Remove(agent.AgentId);
+                agentsByName?.Remove(agent.AgentName);
+                allAgents?.Remove(agent);
+                usedAgentNames?.Remove(agent.AgentName);
                 
-                if (logAgentRegistration)
+                if (logAgentRegistration && !isDestroying)
                 {
-                    Debug.Log($"❌ Unregistered agent: {agent.AgentName} (ID: {agent.agentId})");
+                    Debug.Log($"❌ Unregistered agent: {agent.AgentName} (ID: {agent.AgentId})");
                 }
             }
         }
@@ -277,14 +505,15 @@ namespace AIWorld.Managers
         /// </summary>
         private void LogSimulationStats()
         {
-            if (!IsSimulationRunning) return;
+            // Safety check: don't log if we're being destroyed
+            if (isDestroying || isQuitting || !IsSimulationRunning) return;
             
             Debug.Log($"📊 Simulation Stats - Time: {SimulationTime:F1}s | Agents: {ActiveAgentCount} | " +
                      $"Messages: {totalMessages} | Inner Dialogues: {totalInnerDialogues}");
         }
         
         /// <summary>
-        /// Log final simulation statistics
+        /// Log final simulation statistics with identity information
         /// </summary>
         private void LogFinalStats()
         {
@@ -293,6 +522,7 @@ namespace AIWorld.Managers
             Debug.Log("═══════════════════════════════════════════════════");
             Debug.Log($"⏱️  Total Simulation Time: {SimulationTime:F1} seconds");
             Debug.Log($"🤖 Total Agents: {ActiveAgentCount}");
+            Debug.Log($"📛 Unique Agent Names: {usedAgentNames.Count}");
             Debug.Log($"💬 Total Inter-Agent Messages: {totalMessages}");
             Debug.Log($"💭 Total Inner Dialogues: {totalInnerDialogues}");
             Debug.Log($"📈 Total Communications: {totalMessages + totalInnerDialogues}");
@@ -301,6 +531,16 @@ namespace AIWorld.Managers
             {
                 float avgMessagesPerAgent = (float)(totalMessages + totalInnerDialogues) / ActiveAgentCount;
                 Debug.Log($"📊 Average Messages per Agent: {avgMessagesPerAgent:F1}");
+            }
+            
+            // Show any name duplications that were resolved
+            if (nameCounters.Count > 0)
+            {
+                Debug.Log($"🔧 Name Variants Created: {nameCounters.Count}");
+                foreach (var kvp in nameCounters)
+                {
+                    Debug.Log($"   '{kvp.Key}' → {kvp.Value} variants");
+                }
             }
             
             Debug.Log("═══════════════════════════════════════════════════");
@@ -324,6 +564,16 @@ namespace AIWorld.Managers
         }
         
         /// <summary>
+        /// Check for and report any identity issues
+        /// </summary>
+        [ContextMenu("Validate Agent Identities")]
+        public void ValidateAgentIdentitiesManual()
+        {
+            ValidateAllAgentIdentities();
+            LogAgentIdentitySummary();
+        }
+        
+        /// <summary>
         /// Reset simulation (clear all data)
         /// </summary>
         [ContextMenu("Reset Simulation")]
@@ -334,13 +584,18 @@ namespace AIWorld.Managers
             totalMessages = 0;
             totalInnerDialogues = 0;
             
+            // Clear identity tracking
+            usedAgentNames.Clear();
+            nameCounters.Clear();
+            agentsByName.Clear();
+            
             // Clear conversation histories
             foreach (var agent in allAgents)
             {
                 agent.ConversationHistory.Clear();
             }
             
-            Debug.Log("🔄 Simulation reset");
+            Debug.Log("🔄 Simulation reset with identity tracking cleared");
         }
         
         private void OnApplicationPause(bool pauseStatus)
@@ -353,24 +608,38 @@ namespace AIWorld.Managers
         
         private void OnDestroy()
         {
+            // Set destruction flag immediately to prevent race conditions
+            isDestroying = true;
+            
+            // Cancel any invoked repeating methods FIRST
+            CancelInvoke();
+            
             // Stop any running simulations
             if (IsSimulationRunning)
             {
-                LogFinalStats();
-                StopSimulation();
+                try
+                {
+                    LogFinalStats();
+                    StopSimulation();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Exception during simulation stop: {e.Message}");
+                }
             }
             
-            // Cancel any invoked repeating methods
-            CancelInvoke();
-            
-            // Clear agent references
-            if (agentRegistry != null)
+            // Safely clear agent references with null checks
+            try
             {
-                agentRegistry.Clear();
+                if (agentRegistry != null) agentRegistry.Clear();
+                if (agentsByName != null) agentsByName.Clear();
+                if (allAgents != null) allAgents.Clear();
+                if (usedAgentNames != null) usedAgentNames.Clear();
+                if (nameCounters != null) nameCounters.Clear();
             }
-            if (allAgents != null)
+            catch (System.Exception e)
             {
-                allAgents.Clear();
+                Debug.LogWarning($"Exception during collection cleanup: {e.Message}");
             }
             
             // Reset singleton instance if this is the current instance
@@ -381,7 +650,14 @@ namespace AIWorld.Managers
             
             #if UNITY_EDITOR
             // Unsubscribe from play mode state changes in editor
-            UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            try
+            {
+                UnityEditor.EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Exception during event unsubscription: {e.Message}");
+            }
             #endif
             
             Debug.Log("🗑️ GameManager destroyed and cleaned up");
@@ -403,23 +679,160 @@ namespace AIWorld.Managers
                         StopSimulation();
                     }
                     
+                    // Cancel all invokes
+                    CancelInvoke();
+                    
                     // Clear references
                     if (agentRegistry != null) agentRegistry.Clear();
+                    if (agentsByName != null) agentsByName.Clear();
                     if (allAgents != null) allAgents.Clear();
+                    if (usedAgentNames != null) usedAgentNames.Clear();
+                    if (nameCounters != null) nameCounters.Clear();
                     
+                    // Reset singleton instance
                     _instance = null;
+                    
+                    // Force destroy the GameObject to prevent "not cleaned up" warning
+                    if (gameObject != null)
+                    {
+                        DestroyImmediate(gameObject);
+                    }
                 }
             }
         }
         #endif
         
+        /// <summary>
+        /// Setup NavMesh after a delay to allow world generation to complete
+        /// </summary>
+        private System.Collections.IEnumerator SetupNavMeshAfterDelay()
+        {
+            yield return new WaitForSeconds(navMeshSetupDelay);
+            
+            Debug.Log("🗺️ Starting NavMesh setup for agent navigation...");
+            
+            // Find or create NavMeshSetupManager
+            navMeshSetupManager = FindFirstObjectByType<NavMeshSetupManager>();
+            if (navMeshSetupManager == null)
+            {
+                GameObject navMeshManagerObj = new GameObject("NavMeshSetupManager");
+                navMeshSetupManager = navMeshManagerObj.AddComponent<NavMeshSetupManager>();
+                Debug.Log("🔧 Created NavMeshSetupManager");
+            }
+            
+            // Setup NavMesh
+            navMeshSetupManager.SetupNavMesh();
+            
+            // Wait for setup completion
+            while (!navMeshSetupManager.IsSetupComplete)
+            {
+                yield return new WaitForSeconds(0.5f);
+            }
+            
+            navMeshSetupComplete = true;
+            Debug.Log("✅ NavMesh setup completed");
+            
+            // Validate agent navigation after setup
+            if (validateNavMeshAfterSetup)
+            {
+                ValidateAgentNavigation();
+            }
+        }
+        
+        /// <summary>
+        /// Validate that all agents can navigate properly
+        /// </summary>
+        private void ValidateAgentNavigation()
+        {
+            Debug.Log("🔍 Validating agent navigation...");
+            
+            int validAgents = 0;
+            int invalidAgents = 0;
+            
+            foreach (var agent in allAgents)
+            {
+                if (agent != null)
+                {
+                    var agentMovement = agent.GetComponent<AIWorld.Movement.AgentMovement>();
+                    if (agentMovement != null && agentMovement.ValidateNavMeshSetup())
+                    {
+                        validAgents++;
+                    }
+                    else
+                    {
+                        invalidAgents++;
+                        Debug.LogWarning($"⚠️ {agent.AgentName}: Navigation validation failed");
+                    }
+                }
+            }
+            
+            Debug.Log($"📊 Navigation Validation: {validAgents} valid, {invalidAgents} invalid agents");
+        }
+        
+        /// <summary>
+        /// Manually trigger NavMesh setup
+        /// </summary>
+        [ContextMenu("Setup NavMesh")]
+        public void ManualNavMeshSetup()
+        {
+            if (navMeshSetupManager == null)
+            {
+                navMeshSetupManager = FindFirstObjectByType<NavMeshSetupManager>();
+                if (navMeshSetupManager == null)
+                {
+                    GameObject navMeshManagerObj = new GameObject("NavMeshSetupManager");
+                    navMeshSetupManager = navMeshManagerObj.AddComponent<NavMeshSetupManager>();
+                }
+            }
+            
+            navMeshSetupManager.SetupNavMesh();
+            Debug.Log("🔄 Manual NavMesh setup triggered");
+        }
+        
+        /// <summary>
+        /// Check if NavMesh is properly set up
+        /// </summary>
+        public bool IsNavMeshReady()
+        {
+            return navMeshSetupComplete && navMeshSetupManager != null && navMeshSetupManager.IsSetupComplete;
+        }
+        
+        /// <summary>
+        /// Get NavMesh setup status for debugging
+        /// </summary>
+        public string GetNavMeshStatus()
+        {
+            if (navMeshSetupManager == null) return "NavMeshSetupManager not found";
+            
+            string status = $"Setup Complete: {navMeshSetupManager.IsSetupComplete}\n";
+            status += $"Ground Objects: {navMeshSetupManager.TotalGroundObjects}\n";
+            status += $"Obstacles: {navMeshSetupManager.TotalObstacles}\n";
+            status += $"Agents: {navMeshSetupManager.TotalAgents}";
+            
+            return status;
+        }
+        
         private void OnApplicationQuit()
         {
+            // Set quitting flag to prevent any new operations
+            isQuitting = true;
+            isDestroying = true;
+            
             // Ensure clean shutdown when application quits
             if (IsSimulationRunning)
             {
-                StopSimulation();
+                try
+                {
+                    StopSimulation();
+                }
+                catch (System.Exception e)
+                {
+                    Debug.LogWarning($"Exception during application quit cleanup: {e.Message}");
+                }
             }
+            
+            // Cancel any remaining invokes
+            CancelInvoke();
         }
     }
 }

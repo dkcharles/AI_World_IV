@@ -1,0 +1,45 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 69c3892e4b9371a409dc71cdc2e33e16, type: 3}
+  m_Name: University_Mood_Config
+  m_EditorClassIdentifier: 
+  enableMoodSystem: 1
+  moodChangeFrequency: 120
+  moodVolatility: 0.4
+  conflictMoodImpact: 0.6
+  successMoodBoost: 0.3
+  failureMoodPenalty: 0.4
+  socialMoodInfluence: 0.2
+  moodDecayRate: 0.1
+  moodMemoryDuration: 600
+  enableMoodContagion: 1
+  moodContagionStrength: 0.3
+  universityMoodMultiplier: 1
+  survivalMoodMultiplier: 1.2
+  socialMoodMultiplier: 1.5
+  enableMoodVisualization: 1
+  enableMoodUIDisplay: 1
+  moodVisualizationMaterial: {fileID: 0}
+  ecstaticColor: {r: 1, g: 0, b: 1, a: 1}
+  joyfulColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  contentColor: {r: 0, g: 1, b: 0, a: 1}
+  calmColor: {r: 0, g: 1, b: 1, a: 1}
+  neutralColor: {r: 1, g: 1, b: 1, a: 1}
+  pensiveColor: {r: 0, g: 0, b: 1, a: 1}
+  melancholicColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
+  frustratedColor: {r: 1, g: 0.5, b: 0, a: 1}
+  angryColor: {r: 1, g: 0, b: 0, a: 1}
+  fearfulColor: {r: 0.5, g: 0, b: 0.5, a: 1}
+  depressedColor: {r: 0, g: 0, b: 0, a: 1}
+  extraversionMoodMultiplier: 1.2
+  neuroticismMoodMultiplier: 1.5
+  agreeablenessMoodStabilizer: 0.8

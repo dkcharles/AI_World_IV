@@ -333,6 +333,61 @@ Transform:
   - {fileID: 1236550628}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &127056141
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 127056143}
+  - component: {fileID: 127056142}
+  m_Layer: 0
+  m_Name: TestController
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &127056142
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 127056141}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2dfb2a01082f20408252e0a6bbc3413, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  testPersonality: {fileID: 11400000, guid: f83aec02b62407949af86e59548c554e, type: 2}
+  enhancedClient: {fileID: 679281014}
+  runTestsOnStart: 1
+  testDelay: 2
+  testBasicConnectivity: 1
+  testModelRouting: 1
+  testDifferentTaskTypes: 1
+  testPersonalityVariations: 1
+  testsCompleted: 0
+  testsSuccessful: 0
+  lastModelSelected: 
+--- !u!4 &127056143
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 127056141}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &288064502
 GameObject:
   m_ObjectHideFlags: 0
@@ -399,7 +454,7 @@ NavMeshAgent:
   m_AutoBraking: 1
   m_AutoRepath: 1
   m_Height: 2
-  m_BaseOffset: 0
+  m_BaseOffset: 1
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
 --- !u!114 &288064505
@@ -495,20 +550,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff84318bfa598e342a8bb14fecc3f154, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  useEnhancedAI: 1
+  adaptToLocation: 1
+  enableIntelligentRouting: 1
   enableCognitiveArchitecture: 1
   showCognitiveStatus: 1
-  personality: {fileID: 11400000, guid: 45c17b96f8c3a60438119c4af445fb73, type: 2}
-  agentId: 
+  personalityAsset: {fileID: 0}
   enableInnerDialogue: 1
   enableCommunication: 1
   innerDialogueInterval: 5
   communicationInterval: 8
+  planningInterval: 30
   perceptionRange: 5
+  currentLocation: 
+  locationInfluenceStrength: 1
   logAllMessages: 1
   showDebugInfo: 1
   historyCount: 0
   nearbyCount: 0
+  detectedAreasDisplay: 
+  lastAIModel: 
   cognitiveStatus: 
+  responseMetrics: 
 --- !u!4 &288064508
 Transform:
   m_ObjectHideFlags: 0
@@ -518,7 +581,7 @@ Transform:
   m_GameObject: {fileID: 288064502}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.43, z: 0}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -807,7 +870,7 @@ NavMeshAgent:
   m_AutoBraking: 1
   m_AutoRepath: 1
   m_Height: 2
-  m_BaseOffset: 0
+  m_BaseOffset: 1
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
 --- !u!114 &570666609
@@ -903,20 +966,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff84318bfa598e342a8bb14fecc3f154, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  useEnhancedAI: 1
+  adaptToLocation: 1
+  enableIntelligentRouting: 1
   enableCognitiveArchitecture: 1
   showCognitiveStatus: 0
-  personality: {fileID: 11400000, guid: 45c17b96f8c3a60438119c4af445fb73, type: 2}
-  agentId: 
+  personalityAsset: {fileID: 0}
   enableInnerDialogue: 1
   enableCommunication: 1
   innerDialogueInterval: 5
   communicationInterval: 8
+  planningInterval: 30
   perceptionRange: 5
+  currentLocation: 
+  locationInfluenceStrength: 1
   logAllMessages: 1
   showDebugInfo: 1
   historyCount: 0
   nearbyCount: 0
+  detectedAreasDisplay: 
+  lastAIModel: 
   cognitiveStatus: 
+  responseMetrics: 
 --- !u!4 &570666612
 Transform:
   m_ObjectHideFlags: 0
@@ -926,7 +997,7 @@ Transform:
   m_GameObject: {fileID: 570666606}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 3, y: 1.43, z: 0}
+  m_LocalPosition: {x: 3, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1109,6 +1180,60 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 588038191}
   m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &679281013
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 679281015}
+  - component: {fileID: 679281014}
+  m_Layer: 0
+  m_Name: EnhanceOllamaClient
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &679281014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 679281013}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f503c2b6917ad243b61590d3e0838b5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  serverUrl: http://localhost:3000
+  useEnhancedEndpoints: 1
+  enableTaskRouting: 1
+  logModelSelection: 1
+  forceModel: 
+  defaultUrgency: 1
+  lastSelectedModel: 
+  lastRoutingReason: 
+  lastResponseTime: 0
+  lastQuality: 0
+--- !u!4 &679281015
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 679281013}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &757862607
 GameObject:
   m_ObjectHideFlags: 0
@@ -1175,7 +1300,7 @@ NavMeshAgent:
   m_AutoBraking: 1
   m_AutoRepath: 1
   m_Height: 2
-  m_BaseOffset: 0
+  m_BaseOffset: 1
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
 --- !u!114 &757862610
@@ -1271,20 +1396,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ff84318bfa598e342a8bb14fecc3f154, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  useEnhancedAI: 1
+  adaptToLocation: 1
+  enableIntelligentRouting: 1
   enableCognitiveArchitecture: 1
   showCognitiveStatus: 1
-  personality: {fileID: 11400000, guid: 9db10f5997205594e8b92aae0fdb5a3d, type: 2}
-  agentId: 
+  personalityAsset: {fileID: 0}
   enableInnerDialogue: 1
   enableCommunication: 1
   innerDialogueInterval: 5
   communicationInterval: 8
+  planningInterval: 30
   perceptionRange: 5
+  currentLocation: 
+  locationInfluenceStrength: 1
   logAllMessages: 1
   showDebugInfo: 1
   historyCount: 0
   nearbyCount: 0
+  detectedAreasDisplay: 
+  lastAIModel: 
   cognitiveStatus: 
+  responseMetrics: 
 --- !u!4 &757862613
 Transform:
   m_ObjectHideFlags: 0
@@ -1294,7 +1427,7 @@ Transform:
   m_GameObject: {fileID: 757862607}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -3, y: 1.43, z: 0}
+  m_LocalPosition: {x: -3, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1750,6 +1883,63 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 973103065}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &1000092716
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1000092718}
+  - component: {fileID: 1000092717}
+  m_Layer: 0
+  m_Name: OllamaTestSuite
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!114 &1000092717
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000092716}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6bbb23c91de8e444dab9e6288fc81a07, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ollamaClient: {fileID: 679281014}
+  runTestsOnStart: 1
+  enableDetailedLogging: 1
+  testDelaySeconds: 2
+  testsRun: 0
+  testsPassed: 0
+  testsFailed: 0
+  currentTestStatus: Ready
+  lastModelSelected: 
+  lastTemperatureUsed: 0
+  lastTokensUsed: 0
+  lastResponseQuality: 0
+  lastResponseTimeMs: 0
+--- !u!4 &1000092718
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1000092716}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1209434505
 GameObject:
   m_ObjectHideFlags: 0
@@ -2340,6 +2530,9 @@ MonoBehaviour:
   autoStartSimulation: 1
   simulationSpeed: 1
   maxAgentCount: 10
+  enforceUniqueNames: 1
+  autoFixDuplicateNames: 1
+  logIdentityValidation: 1
   logAgentRegistration: 1
   showSimulationStats: 1
   statsUpdateInterval: 5
@@ -2350,6 +2543,60 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1549344297}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1565647041
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1565647043}
+  - component: {fileID: 1565647042}
+  m_Layer: 0
+  m_Name: AgentManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1565647042
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565647041}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c0c893c3ef554c45879bebf9e738bbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  autoFixOnStart: 1
+  useRaycastForGroundDetection: 1
+  raycastDistance: 10
+  groundLayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  logPositionFixes: 1
+  showDebugGizmos: 0
+  needsFixDisplay: 0
+  groundYDisplay: 0
+--- !u!4 &1565647043
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1565647041}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -2996,3 +3243,7 @@ SceneRoots:
   - {fileID: 288064508}
   - {fileID: 757862613}
   - {fileID: 570666612}
+  - {fileID: 679281015}
+  - {fileID: 127056143}
+  - {fileID: 1000092718}
+  - {fileID: 1565647043}

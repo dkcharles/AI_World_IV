@@ -59,6 +59,9 @@ namespace AIWorld.Movement
             navAgent = GetComponent<NavMeshAgent>();
             bdiEngine = GetComponent<BDIEngine>();
             needsManager = GetComponent<NeedsManager>();
+            
+            // Ensure NavMeshAgent is properly configured
+            EnsureNavMeshAgentSetup();
         }
         
         private void Start()
@@ -107,9 +110,9 @@ namespace AIWorld.Movement
         {
             if (navAgent == null) return;
             
-            // Check if agent is stuck
+            // Check if agent is stuck (made less sensitive)
             float distanceMoved = Vector3.Distance(transform.position, lastPosition);
-            if (distanceMoved < 0.1f)
+            if (distanceMoved < 0.05f)  // Reduced from 0.1f
             {
                 timeSinceLastMovement += 1f;
             }
@@ -119,8 +122,8 @@ namespace AIWorld.Movement
                 lastPosition = transform.position;
             }
             
-            // Handle stuck agent
-            if (timeSinceLastMovement > 5f && navAgent.hasPath)
+            // Handle stuck agent (increased timeout from 5f to 10f)
+            if (timeSinceLastMovement > 10f && navAgent.hasPath)
             {
                 HandleStuckAgent();
             }
@@ -552,6 +555,118 @@ namespace AIWorld.Movement
             }
         }
         #endif
+        
+        /// <summary>
+        /// Ensure NavMeshAgent is properly configured for optimal movement
+        /// </summary>
+        private void EnsureNavMeshAgentSetup()
+        {
+            if (navAgent == null)
+            {
+                navAgent = gameObject.AddComponent<NavMeshAgent>();
+                if (logMovementActions)
+                {
+                    Debug.Log($"🔧 {gameObject.name}: Added missing NavMeshAgent component");
+                }
+            }
+            
+            // Configure optimal NavMeshAgent settings
+            ConfigureNavMeshAgent();
+        }
+        
+        /// <summary>
+        /// Configure NavMeshAgent with optimal settings for AI agents
+        /// </summary>
+        private void ConfigureNavMeshAgent()
+        {
+            if (navAgent == null) return;
+            
+            // Basic movement settings
+            navAgent.speed = baseSpeed;
+            navAgent.acceleration = 8f;
+            navAgent.angularSpeed = 120f;
+            navAgent.stoppingDistance = stoppingDistance;
+            
+            // Navigation settings
+            navAgent.autoBraking = true;
+            navAgent.autoRepath = true;
+            navAgent.radius = 0.5f;
+            navAgent.height = 2f;
+            
+            // Obstacle avoidance
+            navAgent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
+            navAgent.avoidancePriority = Random.Range(20, 80); // Varied priority for natural movement
+            
+            if (logMovementActions)
+            {
+                Debug.Log($"🔧 {gameObject.name}: NavMeshAgent configured for optimal movement");
+            }
+        }
+        
+        /// <summary>
+        /// Check if NavMesh is properly set up for this agent
+        /// </summary>
+        public bool ValidateNavMeshSetup()
+        {
+            if (navAgent == null)
+            {
+                Debug.LogError($"❌ {gameObject.name}: No NavMeshAgent found");
+                return false;
+            }
+            
+            if (!navAgent.enabled)
+            {
+                Debug.LogWarning($"⚠️ {gameObject.name}: NavMeshAgent is disabled");
+                return false;
+            }
+            
+            if (!navAgent.isOnNavMesh)
+            {
+                Debug.LogWarning($"⚠️ {gameObject.name}: Agent is not on NavMesh");
+                
+                // Try to find nearest NavMesh position
+                if (TryRepositionOnNavMesh())
+                {
+                    Debug.Log($"🔧 {gameObject.name}: Successfully repositioned on NavMesh");
+                    return true;
+                }
+                return false;
+            }
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// Try to reposition agent on the nearest NavMesh point
+        /// </summary>
+        private bool TryRepositionOnNavMesh()
+        {
+            NavMeshHit hit;
+            if (NavMesh.SamplePosition(transform.position, out hit, 10f, NavMesh.AllAreas))
+            {
+                transform.position = hit.position;
+                return true;
+            }
+            
+            return false;
+        }
+        
+        /// <summary>
+        /// Get NavMesh information for debugging
+        /// </summary>
+        public string GetNavMeshInfo()
+        {
+            if (navAgent == null) return "No NavMeshAgent";
+            
+            string info = $"NavMesh Status: {(navAgent.isOnNavMesh ? "On NavMesh" : "Off NavMesh")}\n";
+            info += $"Agent Status: {(navAgent.enabled ? "Enabled" : "Disabled")}\n";
+            info += $"Has Path: {navAgent.hasPath}\n";
+            info += $"Path Status: {navAgent.pathStatus}\n";
+            info += $"Remaining Distance: {navAgent.remainingDistance:F1}m\n";
+            info += $"Velocity: {navAgent.velocity.magnitude:F1}m/s";
+            
+            return info;
+        }
     }
     
     /// <summary>

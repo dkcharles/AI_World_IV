@@ -65,7 +65,7 @@ namespace AIWorld.BDI
             
             // Get personality from Agent component
             var agent = GetComponent<AIWorld.Agents.Agent>();
-            personality = agent?.personality;
+            personality = agent?.Personality;
         }
         
         private void Start()
@@ -668,6 +668,64 @@ namespace AIWorld.BDI
         public List<Belief> QueryBeliefs(string predicate, string[] arguments = null)
         {
             return beliefs.Where(b => b.Matches(predicate, arguments) && b.IsValid()).ToList();
+        }
+        
+        /// <summary>
+        /// Add an intention from external sources (e.g., SmartInteractionManager)
+        /// </summary>
+        public void AddIntention(Intention intention)
+        {
+            if (intention == null)
+            {
+                Debug.LogWarning($"[BDI] {gameObject.name}: Cannot add null intention");
+                return;
+            }
+            
+            // Check if we have capacity for more intentions
+            var activeIntentions = intentions.Count(i => i.status == IntentionStatus.Active);
+            if (activeIntentions >= maxActiveIntentions)
+            {
+                // Replace lowest priority active intention if this one is higher priority
+                var lowestPriorityIntention = intentions
+                    .Where(i => i.status == IntentionStatus.Active)
+                    .OrderBy(i => i.commitmentStrength)
+                    .FirstOrDefault();
+                    
+                if (lowestPriorityIntention != null && intention.commitmentStrength > lowestPriorityIntention.commitmentStrength)
+                {
+                    lowestPriorityIntention.status = IntentionStatus.Abandoned;
+                    OnIntentionAbandoned?.Invoke(lowestPriorityIntention);
+                    
+                    if (logBDICycle)
+                    {
+                        Debug.Log($"💔 {gameObject.name}: Replaced intention '{lowestPriorityIntention.intentionName}' with '{intention.intentionName}'");
+                    }
+                }
+                else
+                {
+                    if (logBDICycle)
+                    {
+                        Debug.Log($"❌ {gameObject.name}: Cannot add intention '{intention.intentionName}' - capacity full and priority too low");
+                    }
+                    return;
+                }
+            }
+            
+            // Add the new intention
+            intentions.Add(intention);
+            
+            // Set as current intention if none is active
+            if (currentIntention == null || currentIntention.status != IntentionStatus.Active)
+            {
+                currentIntention = intention;
+            }
+            
+            OnIntentionAdopted?.Invoke(intention);
+            
+            if (logBDICycle)
+            {
+                Debug.Log($"💡 {gameObject.name}: Added external intention '{intention.intentionName}' (commitment: {intention.commitmentStrength:F2})");
+            }
         }
         
         /// <summary>
